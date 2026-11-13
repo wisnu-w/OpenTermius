@@ -15,6 +15,7 @@
   import TunnelsView from './lib/components/TunnelsView.svelte';
   import SftpView from './lib/components/SftpView.svelte';
   import { terminalStore } from './lib/stores/terminal.svelte';
+  import { platform } from './lib/stores/platform.svelte';
   import { api, type ApiVault, type ApiVaultItem } from './lib/api/client';
   import {
     Plus,
@@ -58,6 +59,7 @@
   let collapsedFolders = $state<Record<string, boolean>>({});
   let isSidebarCollapsed = $state(false);
   let isMobileMenuOpen = $state(false);
+  let isSessionSwitcherOpen = $state(false);
   let sftpSelectedHostId = $state('');
 
   function handleOpenSftp(host: any) {
@@ -473,124 +475,189 @@
   />
 
   <!-- Main Viewport Area -->
-  <main class="flex flex-1 flex-col overflow-hidden pb-14 md:pb-0">
+  <main class="flex flex-1 flex-col overflow-hidden {platform.isMobile ? 'pb-16' : 'pb-0'}">
     <!-- Top Header & Tabs Bar -->
-    <header class="flex h-12 items-center justify-between border-b border-[#22222a] bg-[#0e0e13] px-2 sm:px-3">
-      <!-- Left: Mobile Menu / Desktop Toggle + Tabs Bar -->
-      <div class="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 mr-2 sm:mr-4">
-        <!-- Mobile Drawer Toggle Button -->
+    {#if platform.isMobile}
+      {@const navTitles: Record<string, string> = {
+        hosts: 'Hosts',
+        sftp: 'SFTP',
+        tunnels: 'Tunnels',
+        vaults: 'Vaults',
+        keychain: 'Keychain',
+        identities: 'Identities',
+        snippets: 'Snippets',
+        logs: 'Session Logs'
+      }}
+      {@const activeTab = terminalStore.tabs.find((t) => t.active)}
+      <header class="flex h-14 items-center justify-between border-b border-[#1f1f2a] bg-[#0e0e13] px-3 shrink-0 select-none">
         <button
           type="button"
           onclick={() => (isMobileMenuOpen = !isMobileMenuOpen)}
-          class="flex md:hidden items-center justify-center rounded-lg p-1.5 text-neutral-400 hover:text-white hover:bg-[#1a1a24] transition mr-0.5 shrink-0"
+          class="flex h-10 w-10 items-center justify-center rounded-xl text-neutral-300 active:bg-[#1a1a24] transition shrink-0"
           aria-label="Toggle navigation menu"
         >
-          <Menu class="h-4 w-4 text-emerald-400" />
+          <Menu class="h-5 w-5 text-emerald-400" />
         </button>
 
-        <!-- Desktop Sidebar Toggle (Hide / Unhide) -->
-        <button
-          type="button"
-          onclick={() => (isSidebarCollapsed = !isSidebarCollapsed)}
-          class="hidden md:flex items-center justify-center rounded-lg p-1.5 text-neutral-400 hover:text-white hover:bg-[#1a1a24] transition mr-1 shrink-0"
-          title={isSidebarCollapsed ? "Show Sidebar (⌘B)" : "Hide Sidebar (⌘B)"}
-        >
-          {#if isSidebarCollapsed}
-            <PanelLeftOpen class="h-4 w-4 text-emerald-400" />
-          {:else}
-            <PanelLeft class="h-4 w-4" />
-          {/if}
-        </button>
-
-        <button
-          onclick={() => (activeNav = 'hosts')}
-          class="flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-3 py-1.5 text-xs font-semibold transition shrink-0 {activeNav === 'hosts' ? 'bg-[#1a1a24] text-white border border-[#2a2a38]' : 'text-neutral-400 hover:text-white'}"
-        >
-          <Server class="h-3.5 w-3.5" />
-          <span class="hidden sm:inline">Hosts Dashboard</span>
-          <span class="sm:hidden">Hosts</span>
-        </button>
-
-        {#each terminalStore.tabs as tab (tab.id)}
-          <div
-            class="flex items-center gap-2 rounded-lg px-2.5 sm:px-3 py-1.5 text-xs transition cursor-pointer border shrink-0 {tab.active && activeNav === 'terminal' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-medium' : 'bg-[#14141a] text-neutral-400 border-[#20202a] hover:text-neutral-200'}"
-            onclick={() => {
-              terminalStore.selectTab(tab.id);
-              activeNav = 'terminal';
-            }}
-            role="button"
-            tabindex="0"
-            onkeydown={(e) => e.key === 'Enter' && terminalStore.selectTab(tab.id)}
-          >
-            <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-            <span class="max-w-[100px] sm:max-w-[140px] truncate">{tab.label}</span>
+        <div class="flex-1 flex items-center justify-center px-2 min-w-0">
+          {#if activeNav === 'terminal'}
             <button
-              class="text-neutral-500 hover:text-rose-400 p-0.5 rounded"
-              onclick={(e) => {
-                e.stopPropagation();
-                terminalStore.closeTab(tab.id);
-                if (terminalStore.tabCount === 0) {
-                  activeNav = 'hosts';
-                }
-              }}
-              aria-label="Close session"
+              type="button"
+              onclick={() => (isSessionSwitcherOpen = true)}
+              class="flex items-center gap-2 max-w-[210px] rounded-full bg-[#161620] border border-[#282838] px-3.5 py-1.5 text-xs font-semibold text-white active:scale-95 transition"
             >
-              <X class="h-3 w-3" />
+              <span class="h-2 w-2 rounded-full bg-emerald-400 shrink-0"></span>
+              <span class="truncate">{activeTab ? activeTab.label : 'Terminal'}</span>
+              <ChevronDown class="h-3.5 w-3.5 text-neutral-400 shrink-0" />
             </button>
-          </div>
-        {/each}
+          {:else}
+            <h1 class="text-base font-semibold text-white tracking-tight truncate">
+              {navTitles[activeNav] ?? 'OpenTermius'}
+            </h1>
+          {/if}
+        </div>
 
-        <button
-          onclick={handleNewLocalTab}
-          class="flex items-center justify-center h-7 w-7 rounded-lg border border-[#20202a] bg-[#14141a] text-neutral-400 hover:text-white hover:border-[#30303e] transition shrink-0"
-          title="Open new terminal shell"
-          aria-label="Open new terminal shell"
-        >
-          <Plus class="h-3.5 w-3.5" />
-        </button>
-      </div>
-
-      <!-- Quick Actions -->
-      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
-        {#if api.isStandalone()}
+        <div class="flex items-center gap-1 shrink-0">
+          {#if activeNav === 'hosts'}
+            <button
+              type="button"
+              onclick={() => (isImportOpen = true)}
+              class="flex h-10 w-10 items-center justify-center rounded-xl text-neutral-300 active:bg-[#1a1a24] transition"
+              title="Import hosts"
+              aria-label="Import hosts"
+            >
+              <Download class="h-4.5 w-4.5" />
+            </button>
+          {/if}
           <button
             type="button"
-            onclick={() => {
-              isAuthenticated = false;
-              connectionChoice = 'gateway';
-            }}
-            class="hidden md:flex items-center gap-1 rounded bg-indigo-500/15 border border-indigo-500/30 px-2 py-1 text-[10px] font-semibold text-indigo-400 hover:bg-indigo-500/25 transition"
-            title="Switch to Gateway"
+            onclick={handleNewLocalTab}
+            class="flex h-10 w-10 items-center justify-center rounded-xl bg-[#161620] border border-[#252535] text-emerald-400 active:scale-95 transition"
+            title="Open new terminal shell"
+            aria-label="Open new terminal shell"
           >
-            <Laptop class="h-3 w-3" /> Standalone
+            <Plus class="h-5 w-5" />
           </button>
-        {:else}
-          <div class="hidden md:flex items-center gap-1 rounded bg-emerald-500/15 border border-emerald-500/30 px-2 py-1 text-[10px] font-semibold text-emerald-400">
-            <Radio class="h-3 w-3" /> Gateway
-          </div>
-        {/if}
+        </div>
+      </header>
+    {:else}
+      <header class="flex h-12 items-center justify-between border-b border-[#22222a] bg-[#0e0e13] px-2 sm:px-3">
+        <!-- Left: Mobile Menu / Desktop Toggle + Tabs Bar -->
+        <div class="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 mr-2 sm:mr-4">
+          <!-- Tablet Drawer Toggle Button -->
+          <button
+            type="button"
+            onclick={() => (isMobileMenuOpen = !isMobileMenuOpen)}
+            class="flex md:hidden items-center justify-center rounded-lg p-1.5 text-neutral-400 hover:text-white hover:bg-[#1a1a24] transition mr-0.5 shrink-0"
+            aria-label="Toggle navigation menu"
+          >
+            <Menu class="h-4 w-4 text-emerald-400" />
+          </button>
 
-        <button
-          onclick={() => (isImportOpen = true)}
-          class="flex items-center gap-1.5 rounded-lg border border-[#252535] bg-[#14141d] px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-neutral-300 hover:text-white hover:border-[#38384d] transition active:scale-95"
-          title="Import hosts from SSH config or CSV/JSON"
-        >
-          <Download class="h-3.5 w-3.5 text-neutral-400" />
-          <span class="hidden sm:inline">Import</span>
-        </button>
+          <!-- Desktop Sidebar Toggle (Hide / Unhide) -->
+          <button
+            type="button"
+            onclick={() => (isSidebarCollapsed = !isSidebarCollapsed)}
+            class="hidden md:flex items-center justify-center rounded-lg p-1.5 text-neutral-400 hover:text-white hover:bg-[#1a1a24] transition mr-1 shrink-0"
+            title={isSidebarCollapsed ? "Show Sidebar (⌘B)" : "Hide Sidebar (⌘B)"}
+          >
+            {#if isSidebarCollapsed}
+              <PanelLeftOpen class="h-4 w-4 text-emerald-400" />
+            {:else}
+              <PanelLeft class="h-4 w-4" />
+            {/if}
+          </button>
 
-        <button
-          onclick={() => {
-            editingHost = null;
-            isAddHostOpen = true;
-          }}
-          class="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-500 transition active:scale-95"
-        >
-          <Plus class="h-3.5 w-3.5" />
-          <span class="hidden sm:inline">Add Host</span>
-        </button>
-      </div>
-    </header>
+          <button
+            onclick={() => (activeNav = 'hosts')}
+            class="flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-3 py-1.5 text-xs font-semibold transition shrink-0 {activeNav === 'hosts' ? 'bg-[#1a1a24] text-white border border-[#2a2a38]' : 'text-neutral-400 hover:text-white'}"
+          >
+            <Server class="h-3.5 w-3.5" />
+            <span class="hidden sm:inline">Hosts Dashboard</span>
+            <span class="sm:hidden">Hosts</span>
+          </button>
+
+          {#each terminalStore.tabs as tab (tab.id)}
+            <div
+              class="flex items-center gap-2 rounded-lg px-2.5 sm:px-3 py-1.5 text-xs transition cursor-pointer border shrink-0 {tab.active && activeNav === 'terminal' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-medium' : 'bg-[#14141a] text-neutral-400 border-[#20202a] hover:text-neutral-200'}"
+              onclick={() => {
+                terminalStore.selectTab(tab.id);
+                activeNav = 'terminal';
+              }}
+              role="button"
+              tabindex="0"
+              onkeydown={(e) => e.key === 'Enter' && terminalStore.selectTab(tab.id)}
+            >
+              <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+              <span class="max-w-[100px] sm:max-w-[140px] truncate">{tab.label}</span>
+              <button
+                class="text-neutral-500 hover:text-rose-400 p-0.5 rounded"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  terminalStore.closeTab(tab.id);
+                  if (terminalStore.tabCount === 0) {
+                    activeNav = 'hosts';
+                  }
+                }}
+                aria-label="Close session"
+              >
+                <X class="h-3 w-3" />
+              </button>
+            </div>
+          {/each}
+
+          <button
+            onclick={handleNewLocalTab}
+            class="flex items-center justify-center h-7 w-7 rounded-lg border border-[#20202a] bg-[#14141a] text-neutral-400 hover:text-white hover:border-[#30303e] transition shrink-0"
+            title="Open new terminal shell"
+            aria-label="Open new terminal shell"
+          >
+            <Plus class="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {#if api.isStandalone()}
+            <button
+              type="button"
+              onclick={() => {
+                isAuthenticated = false;
+                connectionChoice = 'gateway';
+              }}
+              class="hidden md:flex items-center gap-1 rounded bg-indigo-500/15 border border-indigo-500/30 px-2 py-1 text-[10px] font-semibold text-indigo-400 hover:bg-indigo-500/25 transition"
+              title="Switch to Gateway"
+            >
+              <Laptop class="h-3 w-3" /> Standalone
+            </button>
+          {:else}
+            <div class="hidden md:flex items-center gap-1 rounded bg-emerald-500/15 border border-emerald-500/30 px-2 py-1 text-[10px] font-semibold text-emerald-400">
+              <Radio class="h-3 w-3" /> Gateway
+            </div>
+          {/if}
+
+          <button
+            onclick={() => (isImportOpen = true)}
+            class="flex items-center gap-1.5 rounded-lg border border-[#252535] bg-[#14141d] px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-neutral-300 hover:text-white hover:border-[#38384d] transition active:scale-95"
+            title="Import hosts from SSH config or CSV/JSON"
+          >
+            <Download class="h-3.5 w-3.5 text-neutral-400" />
+            <span class="hidden sm:inline">Import</span>
+          </button>
+
+          <button
+            onclick={() => {
+              editingHost = null;
+              isAddHostOpen = true;
+            }}
+            class="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-500 transition active:scale-95"
+          >
+            <Plus class="h-3.5 w-3.5" />
+            <span class="hidden sm:inline">Add Host</span>
+          </button>
+        </div>
+      </header>
+    {/if}
 
     <!-- Dynamic Screen Content -->
     <div class="flex-1 overflow-hidden bg-[#0a0a0c]">
@@ -1092,57 +1159,169 @@
     </div>
   </main>
 
-  <!-- Mobile Bottom Navigation Bar (Visible on phones & handhelds) -->
-  {#if isAuthenticated}
-    <nav class="md:hidden fixed bottom-0 left-0 right-0 h-14 bg-[#0e0e14]/95 backdrop-blur-md border-t border-[#1f1f2a] flex items-center justify-around z-30 px-1 select-none">
+  <!-- Mobile Floating Action Button (FAB) on Hosts screen -->
+  {#if isAuthenticated && platform.isMobile && activeNav === 'hosts'}
+    <button
+      type="button"
+      onclick={() => {
+        editingHost = null;
+        isAddHostOpen = true;
+      }}
+      class="fixed bottom-20 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500 text-black shadow-lg shadow-emerald-500/25 active:scale-95 transition"
+      aria-label="Add new host"
+    >
+      <Plus class="h-6 w-6 stroke-[2.5]" />
+    </button>
+  {/if}
+
+  <!-- Mobile Terminal Session Switcher Bottom Sheet -->
+  {#if platform.isMobile && isSessionSwitcherOpen}
+    <div
+      class="fixed inset-0 z-50 flex flex-col justify-end bg-black/70 backdrop-blur-xs"
+      onclick={() => (isSessionSwitcherOpen = false)}
+      role="presentation"
+    >
+      <div
+        class="rounded-t-3xl border-t border-[#262635] bg-[#12121a] px-4 pt-3 pb-8 space-y-3 shadow-2xl"
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => {
+          if (e.key === 'Escape') isSessionSwitcherOpen = false;
+        }}
+        role="dialog"
+        tabindex="-1"
+        aria-label="Active Terminal Sessions"
+      >
+        <div class="mx-auto h-1 w-10 rounded-full bg-neutral-700"></div>
+        <div class="flex items-center justify-between pt-1">
+          <h2 class="text-sm font-semibold text-white">Active Sessions ({terminalStore.tabCount})</h2>
+          <button
+            type="button"
+            onclick={() => (isSessionSwitcherOpen = false)}
+            class="rounded-lg p-1.5 text-neutral-400 active:bg-[#1e1e2c]"
+            aria-label="Close session switcher"
+          >
+            <X class="h-4 w-4" />
+          </button>
+        </div>
+
+        <div class="max-h-64 overflow-y-auto space-y-2">
+          {#each terminalStore.tabs as tab (tab.id)}
+            <div
+              class="flex items-center justify-between rounded-2xl border px-3.5 py-3 transition {tab.active ? 'border-emerald-500/40 bg-emerald-500/10 text-white' : 'border-[#222230] bg-[#171722] text-neutral-300'}"
+              onclick={() => {
+                terminalStore.selectTab(tab.id);
+                activeNav = 'terminal';
+                isSessionSwitcherOpen = false;
+              }}
+              role="button"
+              tabindex="0"
+              onkeydown={(e) => {
+                if (e.key === 'Enter') {
+                  terminalStore.selectTab(tab.id);
+                  activeNav = 'terminal';
+                  isSessionSwitcherOpen = false;
+                }
+              }}
+            >
+              <div class="flex items-center gap-3 min-w-0">
+                <span class="h-2.5 w-2.5 rounded-full {tab.active ? 'bg-emerald-400' : 'bg-neutral-500'} shrink-0"></span>
+                <span class="text-sm font-medium truncate">{tab.label}</span>
+              </div>
+              <button
+                type="button"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  terminalStore.closeTab(tab.id);
+                  if (terminalStore.tabCount === 0) {
+                    isSessionSwitcherOpen = false;
+                    activeNav = 'hosts';
+                  }
+                }}
+                class="flex h-8 w-8 items-center justify-center rounded-xl text-neutral-400 hover:text-rose-400 active:bg-rose-500/15 shrink-0"
+                aria-label="Close session"
+              >
+                <X class="h-4 w-4" />
+              </button>
+            </div>
+          {/each}
+        </div>
+
+        <button
+          type="button"
+          onclick={() => {
+            handleNewLocalTab();
+            isSessionSwitcherOpen = false;
+          }}
+          class="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 py-3 text-sm font-semibold text-black active:scale-[0.98] transition"
+        >
+          <Plus class="h-4 w-4" />
+          New Local Shell
+        </button>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Mobile Bottom Navigation Bar (Material 3 style) -->
+  {#if isAuthenticated && platform.isMobile}
+    <nav class="fixed bottom-0 left-0 right-0 h-16 bg-[#0e0e14]/95 backdrop-blur-md border-t border-[#1f1f2a] flex items-center justify-around z-30 px-1 select-none">
       <button
         type="button"
         onclick={() => (activeNav = 'hosts')}
-        class="flex flex-col items-center justify-center flex-1 py-1 {activeNav === 'hosts' ? 'text-emerald-400 font-medium' : 'text-neutral-400 hover:text-neutral-200'}"
+        class="flex flex-col items-center justify-center flex-1 py-1 {activeNav === 'hosts' ? 'text-emerald-400 font-medium' : 'text-neutral-400'}"
       >
-        <Server class="h-4 w-4" />
-        <span class="text-[10px] mt-0.5">Hosts</span>
+        <div class="px-4 py-1 rounded-full transition {activeNav === 'hosts' ? 'bg-emerald-500/20' : ''}">
+          <Server class="h-4.5 w-4.5" />
+        </div>
+        <span class="text-[11px] mt-0.5">Hosts</span>
       </button>
 
       <button
         type="button"
         onclick={() => (activeNav = 'terminal')}
-        class="relative flex flex-col items-center justify-center flex-1 py-1 {activeNav === 'terminal' ? 'text-emerald-400 font-medium' : 'text-neutral-400 hover:text-neutral-200'}"
+        class="relative flex flex-col items-center justify-center flex-1 py-1 {activeNav === 'terminal' ? 'text-emerald-400 font-medium' : 'text-neutral-400'}"
       >
-        <Terminal class="h-4 w-4" />
-        <span class="text-[10px] mt-0.5">Terminal</span>
-        {#if terminalStore.tabCount > 0}
-          <span class="absolute top-1 right-1/4 h-3.5 min-w-[14px] px-1 rounded-full bg-emerald-500 text-black text-[9px] font-bold flex items-center justify-center">
-            {terminalStore.tabCount}
-          </span>
-        {/if}
+        <div class="relative px-4 py-1 rounded-full transition {activeNav === 'terminal' ? 'bg-emerald-500/20' : ''}">
+          <Terminal class="h-4.5 w-4.5" />
+          {#if terminalStore.tabCount > 0}
+            <span class="absolute -top-0.5 right-1.5 h-4 min-w-[16px] px-1 rounded-full bg-emerald-500 text-black text-[9px] font-bold flex items-center justify-center">
+              {terminalStore.tabCount}
+            </span>
+          {/if}
+        </div>
+        <span class="text-[11px] mt-0.5">Terminal</span>
       </button>
 
       <button
         type="button"
         onclick={() => (activeNav = 'sftp')}
-        class="flex flex-col items-center justify-center flex-1 py-1 {activeNav === 'sftp' ? 'text-emerald-400 font-medium' : 'text-neutral-400 hover:text-neutral-200'}"
+        class="flex flex-col items-center justify-center flex-1 py-1 {activeNav === 'sftp' ? 'text-emerald-400 font-medium' : 'text-neutral-400'}"
       >
-        <Folder class="h-4 w-4" />
-        <span class="text-[10px] mt-0.5">SFTP</span>
+        <div class="px-4 py-1 rounded-full transition {activeNav === 'sftp' ? 'bg-emerald-500/20' : ''}">
+          <Folder class="h-4.5 w-4.5" />
+        </div>
+        <span class="text-[11px] mt-0.5">SFTP</span>
       </button>
 
       <button
         type="button"
         onclick={() => (activeNav = 'tunnels')}
-        class="flex flex-col items-center justify-center flex-1 py-1 {activeNav === 'tunnels' ? 'text-emerald-400 font-medium' : 'text-neutral-400 hover:text-neutral-200'}"
+        class="flex flex-col items-center justify-center flex-1 py-1 {activeNav === 'tunnels' ? 'text-emerald-400 font-medium' : 'text-neutral-400'}"
       >
-        <Network class="h-4 w-4" />
-        <span class="text-[10px] mt-0.5">Tunnels</span>
+        <div class="px-4 py-1 rounded-full transition {activeNav === 'tunnels' ? 'bg-emerald-500/20' : ''}">
+          <Network class="h-4.5 w-4.5" />
+        </div>
+        <span class="text-[11px] mt-0.5">Tunnels</span>
       </button>
 
       <button
         type="button"
         onclick={() => (isMobileMenuOpen = true)}
-        class="flex flex-col items-center justify-center flex-1 py-1 text-neutral-400 hover:text-neutral-200"
+        class="flex flex-col items-center justify-center flex-1 py-1 text-neutral-400"
       >
-        <Menu class="h-4 w-4" />
-        <span class="text-[10px] mt-0.5">Menu</span>
+        <div class="px-4 py-1 rounded-full">
+          <Menu class="h-4.5 w-4.5" />
+        </div>
+        <span class="text-[11px] mt-0.5">Menu</span>
       </button>
     </nav>
   {/if}

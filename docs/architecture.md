@@ -130,16 +130,16 @@ opentermius/
   - File table with icons (archive, code, folder, document), formatted byte sizes, download/delete actions, upload picker, and folder creation modal.
   - One-click access from any Host Card (`SFTP` button) or the Sidebar/Bottom Nav.
 
-### 6. Multiplatform Responsive Design (Phone, Tablet, Laptop)
-- **Mobile Handheld (<768px)**:
-  - **Slide-over Drawer**: Sidebar converts into off-canvas drawer with backdrop overlay.
-  - **Bottom Navigation Bar**: Fixed thumb-friendly bottom nav (`Hosts`, `Terminal` with active tab badge, `Tunnels`, `Vaults`, `Menu`).
-  - **Virtual Touch Accessory Bar**: Terminal on-screen keys (`ESC`, `TAB`, `^C`, `^D`, `^Z`, arrows `↑ ↓ ← →`, `/`, `|`, `~`, `-`, `:`) with toggle button.
-  - **Auto-Stack Split Terminal**: Side-by-side terminal splits gracefully fall back to stacked vertical panes (`flex-col md:flex-row`) to prevent unreadable narrow columns.
-  - **Touch-Friendly Modals**: All dialogs use `max-h-[90vh] overflow-y-auto` with touch-sized tap targets.
-- **Tablet (768px - 1024px)**:
-  - Collapsible persistent sidebar with keyboard shortcut (`⌘B`).
-  - 2-column responsive host grid (`sm:grid-cols-2`).
-- **Laptop & Desktop (>1024px)**:
-  - Full persistent multi-pane terminal split (Horizontal / Vertical).
-  - 3-4 column host cards grid (`lg:grid-cols-3 xl:grid-cols-4`).
+### 6. Runtime Platform Detection & Adaptive UI (`platform.svelte.ts`)
+- **Reactive Platform Store (`client-app/src/lib/stores/platform.svelte.ts`)**:
+  - Uses Svelte 5 Runes (`$state`, `$derived`) to expose `platform.isMobile`, `platform.isTablet`, `platform.isDesktop`, `platform.isHandheld`, `platform.isAndroid`, `platform.isIOS`, `platform.isTouch`, and `platform.layoutMode`.
+  - Combines viewport breakpoints (`<768px` mobile, `768px-1024px` tablet, `>1024px` desktop) with `pointer: coarse` and User-Agent detection so handhelds get native touch ergonomics instead of cramped desktop web layouts.
+- **Mobile Handheld (<768px / `platform.isMobile`)**:
+  - **Native App Bar & Session Switcher**: Replaces desktop tab strip with a Material-style `h-14` top bar (drawer toggle, centered screen title or clickable terminal session pill opening a bottom-sheet session switcher, quick `+` shell button).
+  - **Material 3 Bottom Navigation Bar (`h-16`)**: Thumb-friendly navigation (`Hosts`, `Terminal` with session badge, `SFTP`, `Tunnels`, `Menu`) with active pill indicator.
+  - **Native Host List Tiles (`HostCard.svelte`)**: Full-width tap-to-connect rows with quick `SFTP` button and `⋮` overflow menu (`Connect SSH`, `Browse SFTP`, `Edit Host`, `Move Host`, `Delete`), plus a Floating Action Button (`+`) on the Hosts screen.
+  - **Terminal & Touch Ergonomics**: Adaptive terminal font size (`12px` mobile / `14px` desktop), hides desktop split buttons on mobile, `h-9` touch-sized Virtual Key Accessory Bar when `platform.isHandheld`, and global `overscroll-behavior: none`, `touch-action: manipulation`, and disabled tap highlight.
+- **Tablet (768px - 1024px / `platform.isTablet`)**:
+  - Collapsible persistent sidebar with keyboard shortcut (`⌘B`) and 2-column responsive host grid (`sm:grid-cols-2`).
+- **Laptop & Desktop (>1024px / `platform.isDesktop`)**:
+  - Full persistent multi-pane terminal split (Horizontal / Vertical) and 3-4 column host cards grid (`lg:grid-cols-3 xl:grid-cols-4`).

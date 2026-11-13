@@ -9,8 +9,10 @@
     Pencil,
     Trash2,
     FolderInput,
-    Folder
+    Folder,
+    MoreVertical
   } from 'lucide-svelte';
+  import { platform } from '../stores/platform.svelte';
 
   interface HostItem {
     id: string;
@@ -38,8 +40,119 @@
   }
 
   let { host, onConnect, onEdit, onDelete, onMove, onOpenSftp }: Props = $props();
+  let isMenuOpen = $state(false);
 </script>
 
+{#if platform.isMobile}
+  <!-- Native Android/Mobile List Tile -->
+  <div class="relative">
+    <div
+      onclick={() => onConnect(host)}
+      role="button"
+      tabindex="0"
+      onkeydown={(e) => e.key === 'Enter' && onConnect(host)}
+      class="flex items-center justify-between gap-3 rounded-2xl border border-[#22222c] bg-[#14141c] px-3.5 py-3 active:bg-[#1c1c28] active:scale-[0.99] transition cursor-pointer"
+    >
+      <div class="flex items-center gap-3 min-w-0 flex-1">
+        <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          {#if host.useMosh}
+            <Radio class="h-5 w-5" />
+          {:else}
+            <Terminal class="h-5 w-5" />
+          {/if}
+        </div>
+
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2">
+            <h3 class="text-[15px] font-semibold text-white truncate">
+              {host.label}
+            </h3>
+            {#if host.useMosh}
+              <span class="shrink-0 rounded bg-indigo-500/15 px-1.5 py-0.5 text-[9px] font-bold text-indigo-400 uppercase">MOSH</span>
+            {/if}
+          </div>
+          <p class="text-xs text-neutral-400 font-mono truncate mt-0.5">
+            {host.username}@{host.address}:{host.port}
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1 shrink-0" onclick={(e) => e.stopPropagation()} role="presentation">
+        {#if onOpenSftp}
+          <button
+            type="button"
+            onclick={() => onOpenSftp(host)}
+            class="flex h-10 w-10 items-center justify-center rounded-xl text-amber-400 hover:bg-[#222230] active:bg-[#2a2a3a] transition"
+            aria-label="Open SFTP"
+          >
+            <Folder class="h-4.5 w-4.5" />
+          </button>
+        {/if}
+        <button
+          type="button"
+          onclick={() => (isMenuOpen = !isMenuOpen)}
+          class="flex h-10 w-10 items-center justify-center rounded-xl text-neutral-400 hover:bg-[#222230] active:bg-[#2a2a3a] transition"
+          aria-label="More options"
+        >
+          <MoreVertical class="h-4.5 w-4.5" />
+        </button>
+      </div>
+    </div>
+
+    {#if isMenuOpen}
+      <div
+        class="fixed inset-0 z-40"
+        onclick={() => (isMenuOpen = false)}
+        role="presentation"
+      ></div>
+      <div class="absolute right-2 top-14 z-50 w-44 rounded-2xl border border-[#2a2a38] bg-[#181824] p-1.5 shadow-2xl space-y-0.5 animate-in fade-in zoom-in-95 duration-100">
+        <button
+          type="button"
+          onclick={() => { isMenuOpen = false; onConnect(host); }}
+          class="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs font-medium text-emerald-400 hover:bg-[#222232]"
+        >
+          <Zap class="h-4 w-4" /> Connect SSH
+        </button>
+        {#if onOpenSftp}
+          <button
+            type="button"
+            onclick={() => { isMenuOpen = false; onOpenSftp(host); }}
+            class="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs font-medium text-amber-400 hover:bg-[#222232]"
+          >
+            <Folder class="h-4 w-4" /> Browse SFTP
+          </button>
+        {/if}
+        {#if onEdit}
+          <button
+            type="button"
+            onclick={() => { isMenuOpen = false; onEdit(host); }}
+            class="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs text-neutral-200 hover:bg-[#222232]"
+          >
+            <Pencil class="h-4 w-4" /> Edit Host
+          </button>
+        {/if}
+        {#if onMove}
+          <button
+            type="button"
+            onclick={() => { isMenuOpen = false; onMove(host); }}
+            class="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs text-neutral-200 hover:bg-[#222232]"
+          >
+            <FolderInput class="h-4 w-4" /> Move Host
+          </button>
+        {/if}
+        {#if onDelete}
+          <button
+            type="button"
+            onclick={() => { isMenuOpen = false; onDelete(host); }}
+            class="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs text-rose-400 hover:bg-rose-950/40"
+          >
+            <Trash2 class="h-4 w-4" /> Delete
+          </button>
+        {/if}
+      </div>
+    {/if}
+  </div>
+{:else}
 <div class="group relative rounded-xl border border-[#22222a] bg-[#14141a] p-4 transition-all duration-200 hover:border-emerald-500/40 hover:bg-[#171720] hover:shadow-lg hover:shadow-emerald-950/20 overflow-hidden">
   <div class="flex items-start justify-between gap-3">
     <div class="flex items-center gap-3 min-w-0 flex-1">
@@ -139,3 +252,4 @@
     {/if}
   </div>
 </div>
+{/if}

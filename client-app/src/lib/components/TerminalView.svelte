@@ -4,6 +4,7 @@
   import { FitAddon } from '@xterm/addon-fit';
   import { api } from '../api/client';
   import type { TerminalHostConfig } from '../stores/terminal.svelte';
+  import { platform } from '../stores/platform.svelte';
   import {
     Users,
     Share2,
@@ -221,7 +222,7 @@
     term = new Terminal({
       cursorBlink: true,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      fontSize: 13,
+      fontSize: platform.isMobile ? 12 : 14,
       lineHeight: 1.25,
       theme: {
         background: '#0a0a0c',
@@ -332,7 +333,7 @@
     </div>
 
     <div class="flex items-center gap-1.5">
-      {#if onSplitRight}
+      {#if onSplitRight && !platform.isMobile}
         <button
           onclick={onSplitRight}
           class="flex items-center justify-center h-6 w-6 rounded bg-[#181822] text-neutral-400 hover:text-white transition"
@@ -343,7 +344,7 @@
         </button>
       {/if}
 
-      {#if onSplitDown}
+      {#if onSplitDown && !platform.isMobile}
         <button
           onclick={onSplitDown}
           class="flex items-center justify-center h-6 w-6 rounded bg-[#181822] text-neutral-400 hover:text-white transition"
@@ -429,39 +430,40 @@
 
   {#if showAccessoryBar}
     <!-- Mobile & Touch Virtual Key Accessory Bar -->
-    <div class="flex items-center gap-1 overflow-x-auto no-scrollbar py-1.5 px-2 bg-[#0e0e14] border-t border-[#1f1f2a] shrink-0 select-none">
+    {@const hClass = platform.isHandheld ? 'h-9 min-w-[40px]' : 'h-7 min-w-[32px]'}
+    <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1.5 px-2 bg-[#0e0e14] border-t border-[#1f1f2a] shrink-0 select-none">
       <button
         type="button"
         onclick={() => handleVirtualKey('ESC')}
-        class="min-w-[38px] h-7 px-2 rounded bg-[#181824] border border-[#252538] text-[11px] font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
+        class="{hClass} px-2.5 rounded bg-[#181824] border border-[#252538] text-[11px] font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
       >
         ESC
       </button>
       <button
         type="button"
         onclick={() => handleVirtualKey('TAB')}
-        class="min-w-[38px] h-7 px-2 rounded bg-[#181824] border border-[#252538] text-[11px] font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
+        class="{hClass} px-2.5 rounded bg-[#181824] border border-[#252538] text-[11px] font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
       >
         TAB
       </button>
       <button
         type="button"
         onclick={() => handleVirtualKey('CTRL_C')}
-        class="min-w-[42px] h-7 px-2 rounded bg-[#181824] border border-[#252538] text-[11px] font-mono text-rose-300 hover:text-rose-200 active:bg-rose-600 active:text-white transition shrink-0"
+        class="{hClass} px-2.5 rounded bg-[#181824] border border-[#252538] text-[11px] font-mono text-rose-300 hover:text-rose-200 active:bg-rose-600 active:text-white transition shrink-0"
       >
         ^C
       </button>
       <button
         type="button"
         onclick={() => handleVirtualKey('CTRL_D')}
-        class="min-w-[42px] h-7 px-2 rounded bg-[#181824] border border-[#252538] text-[11px] font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
+        class="{hClass} px-2.5 rounded bg-[#181824] border border-[#252538] text-[11px] font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
       >
         ^D
       </button>
       <button
         type="button"
         onclick={() => handleVirtualKey('CTRL_Z')}
-        class="min-w-[42px] h-7 px-2 rounded bg-[#181824] border border-[#252538] text-[11px] font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
+        class="{hClass} px-2.5 rounded bg-[#181824] border border-[#252538] text-[11px] font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
       >
         ^Z
       </button>
@@ -469,28 +471,28 @@
       <button
         type="button"
         onclick={() => handleVirtualKey('UP')}
-        class="min-w-[32px] h-7 px-2 rounded bg-[#181824] border border-[#252538] text-xs font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
+        class="{hClass} px-2 rounded bg-[#181824] border border-[#252538] text-xs font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
       >
         ↑
       </button>
       <button
         type="button"
         onclick={() => handleVirtualKey('DOWN')}
-        class="min-w-[32px] h-7 px-2 rounded bg-[#181824] border border-[#252538] text-xs font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
+        class="{hClass} px-2 rounded bg-[#181824] border border-[#252538] text-xs font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
       >
         ↓
       </button>
       <button
         type="button"
         onclick={() => handleVirtualKey('LEFT')}
-        class="min-w-[32px] h-7 px-2 rounded bg-[#181824] border border-[#252538] text-xs font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
+        class="{hClass} px-2 rounded bg-[#181824] border border-[#252538] text-xs font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
       >
         ←
       </button>
       <button
         type="button"
         onclick={() => handleVirtualKey('RIGHT')}
-        class="min-w-[32px] h-7 px-2 rounded bg-[#181824] border border-[#252538] text-xs font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
+        class="{hClass} px-2 rounded bg-[#181824] border border-[#252538] text-xs font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
       >
         →
       </button>
@@ -498,35 +500,35 @@
       <button
         type="button"
         onclick={() => handleVirtualKey('/')}
-        class="min-w-[28px] h-7 px-2 rounded bg-[#181824] border border-[#252538] text-xs font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
+        class="{hClass} px-2 rounded bg-[#181824] border border-[#252538] text-xs font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
       >
         /
       </button>
       <button
         type="button"
         onclick={() => handleVirtualKey('|')}
-        class="min-w-[28px] h-7 px-2 rounded bg-[#181824] border border-[#252538] text-xs font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
+        class="{hClass} px-2 rounded bg-[#181824] border border-[#252538] text-xs font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
       >
         |
       </button>
       <button
         type="button"
         onclick={() => handleVirtualKey('~')}
-        class="min-w-[28px] h-7 px-2 rounded bg-[#181824] border border-[#252538] text-xs font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
+        class="{hClass} px-2 rounded bg-[#181824] border border-[#252538] text-xs font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
       >
         ~
       </button>
       <button
         type="button"
         onclick={() => handleVirtualKey('-')}
-        class="min-w-[28px] h-7 px-2 rounded bg-[#181824] border border-[#252538] text-xs font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
+        class="{hClass} px-2 rounded bg-[#181824] border border-[#252538] text-xs font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
       >
         -
       </button>
       <button
         type="button"
         onclick={() => handleVirtualKey(':')}
-        class="min-w-[28px] h-7 px-2 rounded bg-[#181824] border border-[#252538] text-xs font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
+        class="{hClass} px-2 rounded bg-[#181824] border border-[#252538] text-xs font-mono text-neutral-300 hover:text-white active:bg-emerald-600 active:text-white transition shrink-0"
       >
         :
       </button>
