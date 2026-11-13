@@ -23,6 +23,9 @@
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior: none;
     overflow: hidden;
+  }
+
+  body {
     padding-top: var(--sat);
     padding-bottom: var(--sab);
     padding-left: var(--sal);

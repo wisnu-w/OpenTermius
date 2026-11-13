@@ -11,15 +11,17 @@ class MainActivity : TauriActivity() {
     super.onCreate(savedInstanceState)
 
     ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content)) { view, insets ->
-      val statusBars = insets.getInsets(WindowInsetsCompat.Type.statusBars())
-      val navBars = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+      val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
       val displayCutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
+      val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
 
-      val topInset = maxOf(statusBars.top, displayCutout.top)
-      val bottomInset = maxOf(navBars.bottom, displayCutout.bottom)
+      val topInset = maxOf(systemBars.top, displayCutout.top)
+      val bottomInset = maxOf(systemBars.bottom, displayCutout.bottom, ime.bottom)
+      val leftInset = maxOf(systemBars.left, displayCutout.left)
+      val rightInset = maxOf(systemBars.right, displayCutout.right)
 
-      view.setPadding(0, topInset, 0, bottomInset)
-      insets
+      view.setPadding(leftInset, topInset, rightInset, bottomInset)
+      WindowInsetsCompat.CONSUMED
     }
   }
 }
