@@ -1,0 +1,36 @@
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+
+# Go build outputs
+backend/bin/
+*.exe
+*.test
+*.out
+
+# Rust build outputs
+target/
+src-tauri/target/
+client-app/src-tauri/target/
+
+# Node / Vite build outputs
+dist/
+build/
+.svelte-kit/
+
+# Android build outputs & Gradle
+.gradle/
+client-app/src-tauri/gen/android/.gradle/
+client-app/src-tauri/gen/android/app/build/
+*.apk
+*.aab
+*.dmg
+
+# Environment & logs
+*.env
+*.env.*
+!*.env.example
+*.log
