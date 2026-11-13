@@ -21,7 +21,9 @@ pub struct TerminalOpenConfig {
     pub host: Option<String>,
     pub port: Option<u16>,
     pub username: Option<String>,
+    pub password: Option<String>,
     pub private_key: Option<String>,
+    pub passphrase: Option<String>,
     pub cols: Option<u16>,
     pub rows: Option<u16>,
 }
@@ -100,10 +102,13 @@ fn terminal_open(
     drop(pair.slave);
 
     let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
-    let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
+    let writer = Arc::new(Mutex::new(pair.master.take_writer().map_err(|e| e.to_string())?));
 
     let session_id_clone = config.session_id.clone();
     let app_clone = app.clone();
+    let writer_clone = Arc::clone(&writer);
+    let mut pending_password = config.password.filter(|p| !p.is_empty());
+    let mut pending_passphrase = config.passphrase.filter(|p| !p.is_empty());
 
     std::thread::spawn(move || {
         let mut buf = [0u8; 4096];
@@ -114,6 +119,24 @@ fn terminal_open(
                 Ok(0) => break,
                 Ok(n) => {
                     let chunk = String::from_utf8_lossy(&buf[..n]).to_string();
+                    let lower = chunk.to_lowercase();
+
+                    if lower.contains("passphrase") {
+                        if let Some(pp) = pending_passphrase.take() {
+                            if let Ok(mut w) = writer_clone.lock() {
+                                let _ = w.write_all(format!("{}\n", pp).as_bytes());
+                                let _ = w.flush();
+                            }
+                        }
+                    } else if lower.contains("password:") {
+                        if let Some(pw) = pending_password.take() {
+                            if let Ok(mut w) = writer_clone.lock() {
+                                let _ = w.write_all(format!("{}\n", pw).as_bytes());
+                                let _ = w.flush();
+                            }
+                        }
+                    }
+
                     if app_clone.emit(&event_name, chunk).is_err() {
                         break;
                     }
@@ -129,7 +152,7 @@ fn terminal_open(
     sessions.insert(
         config.session_id,
         SessionHandle {
-            writer: Arc::new(Mutex::new(writer)),
+            writer,
             master: Arc::new(Mutex::new(pair.master)),
         },
     );

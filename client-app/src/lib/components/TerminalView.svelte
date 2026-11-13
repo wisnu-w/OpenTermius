@@ -135,7 +135,9 @@
           host: config?.address,
           port: config?.port || 22,
           username: config?.username,
+          password: config?.password,
           private_key: config?.privateKey,
+          passphrase: config?.passphrase,
           cols,
           rows
         }
