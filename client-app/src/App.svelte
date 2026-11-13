@@ -43,7 +43,13 @@
     Download,
     Menu,
     Terminal,
-    FolderLock
+    FolderLock,
+    Key,
+    UserCheck,
+    FileCode2,
+    ScrollText,
+    Settings,
+    LayoutGrid
   } from 'lucide-svelte';
 
   // Svelte 5 Runes State
@@ -461,18 +467,20 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="flex h-screen w-screen overflow-hidden bg-[#0a0a0c] text-neutral-100 font-sans select-none">
-  <!-- Left Navigation Sidebar -->
-  <Sidebar
-    {activeNav}
-    onNavChange={(nav) => (activeNav = nav)}
-    {activeVault}
-    {vaults}
-    onSelectVault={handleSelectVault}
-    isCollapsed={isSidebarCollapsed}
-    onToggleCollapse={() => (isSidebarCollapsed = !isSidebarCollapsed)}
-    isMobileOpen={isMobileMenuOpen}
-    onCloseMobile={() => (isMobileMenuOpen = false)}
-  />
+  <!-- Left Navigation Sidebar (Desktop & Tablet only; Mobile uses native Bottom Nav + More screen) -->
+  {#if !platform.isMobile}
+    <Sidebar
+      {activeNav}
+      onNavChange={(nav) => (activeNav = nav)}
+      {activeVault}
+      {vaults}
+      onSelectVault={handleSelectVault}
+      isCollapsed={isSidebarCollapsed}
+      onToggleCollapse={() => (isSidebarCollapsed = !isSidebarCollapsed)}
+      isMobileOpen={isMobileMenuOpen}
+      onCloseMobile={() => (isMobileMenuOpen = false)}
+    />
+  {/if}
 
   <!-- Main Viewport Area -->
   <main class="flex flex-1 flex-col overflow-hidden {platform.isMobile ? 'pb-16' : 'pb-0'}">
@@ -482,42 +490,52 @@
         hosts: 'Hosts',
         sftp: 'SFTP',
         tunnels: 'Tunnels',
+        more: 'More',
         vaults: 'Vaults',
         keychain: 'Keychain',
         identities: 'Identities',
         snippets: 'Snippets',
-        logs: 'Session Logs'
+        logs: 'Session Logs',
+        settings: 'Settings'
       }}
+      {@const isSubPage = ['vaults', 'keychain', 'identities', 'snippets', 'logs', 'settings'].includes(activeNav)}
       {@const activeTab = terminalStore.tabs.find((t) => t.active)}
-      <header class="flex h-14 items-center justify-between border-b border-[#1f1f2a] bg-[#0e0e13] px-3 shrink-0 select-none">
-        <button
-          type="button"
-          onclick={() => (isMobileMenuOpen = !isMobileMenuOpen)}
-          class="flex h-10 w-10 items-center justify-center rounded-xl text-neutral-300 active:bg-[#1a1a24] transition shrink-0"
-          aria-label="Toggle navigation menu"
-        >
-          <Menu class="h-5 w-5 text-emerald-400" />
-        </button>
+      <header class="flex h-14 items-center justify-between border-b border-[#1f1f2a] bg-[#0e0e13] px-3.5 shrink-0 select-none">
+        <div class="flex items-center gap-2 min-w-0 flex-1">
+          {#if isSubPage}
+            <button
+              type="button"
+              onclick={() => (activeNav = 'more')}
+              class="flex h-10 w-10 -ml-1.5 items-center justify-center rounded-xl text-neutral-300 active:bg-[#1a1a24] transition shrink-0"
+              aria-label="Back to More"
+            >
+              <ArrowLeft class="h-5 w-5" />
+            </button>
+          {/if}
 
-        <div class="flex-1 flex items-center justify-center px-2 min-w-0">
           {#if activeNav === 'terminal'}
             <button
               type="button"
               onclick={() => (isSessionSwitcherOpen = true)}
-              class="flex items-center gap-2 max-w-[210px] rounded-full bg-[#161620] border border-[#282838] px-3.5 py-1.5 text-xs font-semibold text-white active:scale-95 transition"
+              class="flex items-center gap-2 max-w-[220px] rounded-full bg-[#161620] border border-[#282838] px-3.5 py-1.5 text-xs font-semibold text-white active:scale-95 transition"
             >
               <span class="h-2 w-2 rounded-full bg-emerald-400 shrink-0"></span>
               <span class="truncate">{activeTab ? activeTab.label : 'Terminal'}</span>
               <ChevronDown class="h-3.5 w-3.5 text-neutral-400 shrink-0" />
             </button>
           {:else}
-            <h1 class="text-base font-semibold text-white tracking-tight truncate">
+            <h1 class="text-lg font-semibold text-white tracking-tight truncate">
               {navTitles[activeNav] ?? 'OpenTermius'}
             </h1>
+            {#if activeNav === 'hosts' && activeVault}
+              <span class="ml-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-400 truncate max-w-[110px]">
+                {activeVault.name}
+              </span>
+            {/if}
           {/if}
         </div>
 
-        <div class="flex items-center gap-1 shrink-0">
+        <div class="flex items-center gap-1.5 shrink-0">
           {#if activeNav === 'hosts'}
             <button
               type="button"
@@ -1091,6 +1109,58 @@
         <SnippetsView activeVaultId={activeVault?.id} />
       {:else if activeNav === 'logs'}
         <SessionLogsView />
+      {:else if activeNav === 'more'}
+        {@const moreItems = [
+          { id: 'keychain', label: 'Keychain', desc: 'SSH keys & certificates', icon: Key },
+          { id: 'identities', label: 'Identities', desc: 'Saved usernames & profiles', icon: UserCheck },
+          { id: 'snippets', label: 'Snippets', desc: 'Reusable shell commands', icon: FileCode2 },
+          { id: 'vaults', label: 'Vaults (E2EE)', desc: 'Encrypted personal & team vaults', icon: FolderLock },
+          { id: 'logs', label: 'Session Logs', desc: 'Terminal history & audit trail', icon: ScrollText },
+          { id: 'settings', label: 'Settings', desc: 'Gateway URL & workspace mode', icon: Settings }
+        ]}
+        <div class="h-full overflow-y-auto p-4 space-y-5">
+          {#if vaults.length > 0}
+            <div class="rounded-2xl border border-[#22222c] bg-[#121218] p-3.5 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">Active Vault</span>
+                <span class="text-[11px] text-emerald-400 font-medium">{api.isStandalone() ? 'Standalone' : 'Gateway'}</span>
+              </div>
+              <div class="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
+                {#each vaults as v (v.id)}
+                  <button
+                    type="button"
+                    onclick={() => handleSelectVault(v)}
+                    class="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium shrink-0 transition active:scale-95 {activeVault?.id === v.id ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300' : 'border-[#252532] bg-[#181822] text-neutral-300'}"
+                  >
+                    <FolderLock class="h-3.5 w-3.5 shrink-0" />
+                    <span>{v.name}</span>
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/if}
+
+          <div class="rounded-2xl border border-[#22222c] bg-[#121218] divide-y divide-[#1c1c26] overflow-hidden">
+            {#each moreItems as item (item.id)}
+              <button
+                type="button"
+                onclick={() => (activeNav = item.id)}
+                class="flex w-full items-center justify-between px-4 py-3.5 text-left active:bg-[#1a1a24] transition"
+              >
+                <div class="flex items-center gap-3.5 min-w-0">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1a1a24] text-emerald-400 shrink-0">
+                    <item.icon class="h-5 w-5" />
+                  </div>
+                  <div class="min-w-0">
+                    <div class="text-sm font-medium text-white">{item.label}</div>
+                    <div class="text-xs text-neutral-400 truncate">{item.desc}</div>
+                  </div>
+                </div>
+                <ChevronRight class="h-4 w-4 text-neutral-500 shrink-0" />
+              </button>
+            {/each}
+          </div>
+        </div>
       {:else if activeNav === 'settings'}
         <div class="h-full overflow-y-auto p-6 space-y-6 max-w-2xl">
           <h2 class="text-lg font-bold text-white">Settings & Preferences</h2>
@@ -1143,7 +1213,7 @@
               />
             </div>
             <div class="pt-2 border-t border-[#20202c] flex items-center justify-between">
-              <span class="text-neutral-400 font-mono text-[11px]">OpenTermius v0.1.0</span>
+              <span class="text-neutral-400 font-mono text-[11px]">OpenTermius v0.1.1</span>
               <button
                 type="button"
                 onclick={handleSignOut}
@@ -1263,6 +1333,7 @@
 
   <!-- Mobile Bottom Navigation Bar (Material 3 style) -->
   {#if isAuthenticated && platform.isMobile}
+    {@const isMoreActive = ['more', 'vaults', 'keychain', 'identities', 'snippets', 'logs', 'settings'].includes(activeNav)}
     <nav class="fixed bottom-0 left-0 right-0 h-16 bg-[#0e0e14]/95 backdrop-blur-md border-t border-[#1f1f2a] flex items-center justify-around z-30 px-1 select-none">
       <button
         type="button"
@@ -1315,13 +1386,13 @@
 
       <button
         type="button"
-        onclick={() => (isMobileMenuOpen = true)}
-        class="flex flex-col items-center justify-center flex-1 py-1 text-neutral-400"
+        onclick={() => (activeNav = 'more')}
+        class="flex flex-col items-center justify-center flex-1 py-1 {isMoreActive ? 'text-emerald-400 font-medium' : 'text-neutral-400'}"
       >
-        <div class="px-4 py-1 rounded-full">
-          <Menu class="h-4.5 w-4.5" />
+        <div class="px-4 py-1 rounded-full transition {isMoreActive ? 'bg-emerald-500/20' : ''}">
+          <LayoutGrid class="h-4.5 w-4.5" />
         </div>
-        <span class="text-[11px] mt-0.5">Menu</span>
+        <span class="text-[11px] mt-0.5">More</span>
       </button>
     </nav>
   {/if}
