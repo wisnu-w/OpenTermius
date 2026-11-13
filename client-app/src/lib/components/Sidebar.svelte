@@ -18,6 +18,7 @@
     Folder
   } from 'lucide-svelte';
   import { api, type ApiVault } from '../api/client';
+  import { platform } from '../stores/platform.svelte';
 
   interface Props {
     activeNav: string;
@@ -78,12 +79,16 @@
 {/if}
 
 <aside
-  class="flex flex-col justify-between border-r border-[#22222a] bg-[#101014] select-none transition-all duration-200 ease-in-out shrink-0
+  class="flex flex-col justify-between border-r border-[#1c1c25] bg-[#0d0d12] select-none transition-all duration-200 ease-in-out shrink-0
     fixed inset-y-0 left-0 z-50 w-72 p-4 shadow-2xl md:relative md:z-auto md:shadow-none
+    {platform.isMac && platform.isNativeTauri ? 'md:pt-9' : ''}
     {isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-    {isCollapsed ? 'md:w-0 md:p-0 md:border-r-0 md:overflow-hidden md:opacity-0 md:pointer-events-none' : 'md:w-64 md:p-4 md:opacity-100'}
+    {isCollapsed ? 'md:w-0 md:p-0 md:border-r-0 md:overflow-hidden md:opacity-0 md:pointer-events-none' : 'md:w-60 md:p-3.5 md:opacity-100'}
   "
 >
+  {#if platform.isMac && platform.isNativeTauri}
+    <div data-tauri-drag-region class="hidden md:block absolute top-0 left-0 right-0 h-8 z-10"></div>
+  {/if}
   <!-- Brand Header -->
   <div>
     <div class="flex items-center justify-between px-1 py-2 mb-4">

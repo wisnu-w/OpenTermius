@@ -13,6 +13,7 @@ class PlatformStore {
 
   isAndroid = $derived(/android/i.test(this.userAgent));
   isIOS = $derived(/ipad|iphone|ipod/i.test(this.userAgent));
+  isMac = $derived(/macintosh|mac os x/i.test(this.userAgent) && !this.isIOS);
   isNativeTauri = $derived(
     typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
   );

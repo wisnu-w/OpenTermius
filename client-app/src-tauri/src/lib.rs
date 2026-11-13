@@ -2,7 +2,9 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::time::UNIX_EPOCH;
 use tauri::{AppHandle, Emitter, State};
 
 struct SessionHandle {
@@ -212,6 +214,107 @@ fn terminal_close(state: State<'_, TerminalState>, session_id: String) -> Result
     Ok(())
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalFsItem {
+    pub name: String,
+    pub path: String,
+    pub size: u64,
+    pub is_dir: bool,
+    pub mod_time: String,
+    pub mode: String,
+}
+
+#[derive(Serialize)]
+pub struct LocalFsListResult {
+    pub path: String,
+    pub items: Vec<LocalFsItem>,
+}
+
+#[tauri::command]
+fn local_fs_list(path: String) -> Result<LocalFsListResult, String> {
+    let target = if path.trim().is_empty() {
+        std::env::var("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from("/"))
+    } else {
+        PathBuf::from(path.trim())
+    };
+
+    let canonical = std::fs::canonicalize(&target).unwrap_or(target);
+    let read_dir = std::fs::read_dir(&canonical).map_err(|e| e.to_string())?;
+
+    let mut items = Vec::new();
+    for entry in read_dir.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        let entry_path = entry.path();
+        let meta = match entry.metadata() {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        let is_dir = meta.is_dir();
+        let size = if is_dir { 0 } else { meta.len() };
+        let mod_secs = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        #[cfg(unix)]
+        let mode = {
+            use std::os::unix::fs::PermissionsExt;
+            format!("{:o}", meta.permissions().mode() & 0o777)
+        };
+        #[cfg(not(unix))]
+        let mode = String::from("644");
+
+        items.push(LocalFsItem {
+            name,
+            path: entry_path.to_string_lossy().to_string(),
+            size,
+            is_dir,
+            mod_time: mod_secs.to_string(),
+            mode,
+        });
+    }
+
+    items.sort_by(|a, b| {
+        b.is_dir
+            .cmp(&a.is_dir)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+
+    Ok(LocalFsListResult {
+        path: canonical.to_string_lossy().to_string(),
+        items,
+    })
+}
+
+#[tauri::command]
+fn local_fs_mkdir(path: String) -> Result<(), String> {
+    std::fs::create_dir_all(path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn local_fs_delete(path: String) -> Result<(), String> {
+    let p = PathBuf::from(&path);
+    if p.is_dir() {
+        std::fs::remove_dir_all(p).map_err(|e| e.to_string())
+    } else {
+        std::fs::remove_file(p).map_err(|e| e.to_string())
+    }
+}
+
+#[tauri::command]
+fn local_fs_read_bytes(path: String) -> Result<Vec<u8>, String> {
+    std::fs::read(path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn local_fs_write_bytes(path: String, data: Vec<u8>) -> Result<(), String> {
+    std::fs::write(path, data).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -225,7 +328,12 @@ pub fn run() {
             terminal_open,
             terminal_write,
             terminal_resize,
-            terminal_close
+            terminal_close,
+            local_fs_list,
+            local_fs_mkdir,
+            local_fs_delete,
+            local_fs_read_bytes,
+            local_fs_write_bytes
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

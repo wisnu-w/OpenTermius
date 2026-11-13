@@ -559,9 +559,12 @@
         </div>
       </header>
     {:else}
-      <header class="flex h-12 items-center justify-between border-b border-[#22222a] bg-[#0e0e13] px-2 sm:px-3">
+      <header
+        data-tauri-drag-region
+        class="flex h-11 items-center justify-between border-b border-[#1c1c25] bg-[#111116] px-2.5 sm:px-3 shrink-0 {platform.isMac && platform.isNativeTauri && isSidebarCollapsed ? 'pl-20' : ''}"
+      >
         <!-- Left: Mobile Menu / Desktop Toggle + Tabs Bar -->
-        <div class="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 mr-2 sm:mr-4">
+        <div data-tauri-drag-region class="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 mr-2 sm:mr-4">
           <!-- Tablet Drawer Toggle Button -->
           <button
             type="button"

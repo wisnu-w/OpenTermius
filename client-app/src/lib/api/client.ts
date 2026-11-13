@@ -450,7 +450,7 @@ class ApiClient {
     }
   }
 
-  async sftpDownload(config: SftpHostConfig, path: string, filename: string): Promise<void> {
+  async sftpDownloadBlob(config: SftpHostConfig, path: string): Promise<Blob> {
     const payload = {
       host: config.address,
       port: config.port || 22,
@@ -477,7 +477,11 @@ class ApiClient {
       throw new Error(err.error || 'Download failed');
     }
 
-    const blob = await response.blob();
+    return response.blob();
+  }
+
+  async sftpDownload(config: SftpHostConfig, path: string, filename: string): Promise<void> {
+    const blob = await this.sftpDownloadBlob(config, path);
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

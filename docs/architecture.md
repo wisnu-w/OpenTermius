@@ -125,10 +125,10 @@ opentermius/
   - Implements `ports.SFTPService` via `github.com/pkg/sftp` on top of standard Go `crypto/ssh`.
   - Supports directory listing with metadata (size, modTime, POSIX permissions), file streaming downloads, multipart uploads, folder creation, and recursive/single item deletion.
   - Endpoints protected under `/api/v1/sftp/*` with JWT and standalone token compatibility.
-- **Frontend File Explorer (`SftpView.svelte`)**:
-  - Simple Termius-style interface: host picker, breadcrumb navigation, parent folder jump (`..`), search filter.
-  - File table with icons (archive, code, folder, document), formatted byte sizes, download/delete actions, upload picker, and folder creation modal.
-  - One-click access from any Host Card (`SFTP` button) or the Sidebar/Bottom Nav.
+- **Frontend Dual-Pane File Explorer (`SftpView.svelte` + `SftpPane.svelte`)**:
+  - Termius-style side-by-side dual-pane layout on macOS/desktop (Left/Right pane switcher on mobile).
+  - Each pane independently targets **Local Machine** (via native Tauri FS IPC commands `local_fs_*`) or any saved SSH Host (including same-host or cross-host).
+  - Multi-file selection with one-click **Copy** and **Move** across Local <-> Remote, Remote <-> Remote, and Local <-> Local, plus folder creation, upload, and delete.
 
 ### 6. Runtime Platform Detection & Adaptive UI (`platform.svelte.ts`)
 - **Reactive Platform Store (`client-app/src/lib/stores/platform.svelte.ts`)**:
