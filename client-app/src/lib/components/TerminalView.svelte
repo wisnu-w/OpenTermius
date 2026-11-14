@@ -2,18 +2,14 @@
   import { onMount, onDestroy } from 'svelte';
   import { Terminal } from '@xterm/xterm';
   import { FitAddon } from '@xterm/addon-fit';
-  import { api } from '../api/client';
   import type { TerminalHostConfig } from '../stores/terminal.svelte';
   import { platform } from '../stores/platform.svelte';
+  import { formatErrorMessage } from '../stores/toast.svelte';
   import {
-    Users,
     Share2,
     RefreshCw,
     Trash2,
-    Radio,
     AlertCircle,
-    ShieldCheck,
-    Cpu,
     Columns2,
     Rows2,
     X,
@@ -51,11 +47,7 @@
   let terminalContainer: HTMLDivElement | null = $state(null);
   let term: Terminal | null = null;
   let fitAddon: FitAddon | null = null;
-  let ws: WebSocket | null = null;
   let resizeObserver: ResizeObserver | null = null;
-
-  // Detect if running inside native Tauri desktop app
-  const isNativeApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
   let unlistenData: (() => void) | null = null;
   let unlistenExit: (() => void) | null = null;
@@ -65,15 +57,45 @@
   let errorMessage = $state<string | null>(null);
   let showAccessoryBar = $state(true);
   let btnTouch = $derived(platform.isHandheld ? 'h-9 w-9 justify-center' : 'px-2 py-1');
+  let sessionStartMs = 0;
+
+  function recordSessionLog() {
+    if (typeof window === 'undefined') return;
+    sessionStartMs = Date.now();
+    try {
+      const raw = localStorage.getItem('opentermius_session_logs');
+      const list = raw ? JSON.parse(raw) : [];
+      const entry = {
+        id: activeSessionId,
+        hostLabel: title || config?.address || 'Local Shell',
+        target: config?.address ? `${config.username || 'root'}@${config.address}:${config.port || 22}` : 'local-pty',
+        mode: config?.address ? 'Native SSH' : 'Local PTY',
+        startedAt: new Date().toISOString(),
+        durationSec: 0
+      };
+      const filtered = list.filter((item: { id: string }) => item.id !== activeSessionId);
+      localStorage.setItem('opentermius_session_logs', JSON.stringify([entry, ...filtered].slice(0, 100)));
+    } catch {}
+  }
+
+  function finalizeSessionLog() {
+    if (typeof window === 'undefined' || !sessionStartMs) return;
+    const elapsedSec = Math.max(1, Math.round((Date.now() - sessionStartMs) / 1000));
+    try {
+      const raw = localStorage.getItem('opentermius_session_logs');
+      if (!raw) return;
+      const list = JSON.parse(raw);
+      const updated = list.map((item: { id: string; durationSec?: number }) =>
+        item.id === activeSessionId ? { ...item, durationSec: elapsedSec } : item
+      );
+      localStorage.setItem('opentermius_session_logs', JSON.stringify(updated));
+    } catch {}
+  }
 
   function sendTerminalInput(data: string) {
-    if (isNativeApp) {
-      import('@tauri-apps/api/core').then(({ invoke }) => {
-        invoke('terminal_write', { sessionId: activeSessionId, data }).catch(() => {});
-      });
-    } else if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(data);
-    }
+    import('@tauri-apps/api/core').then(({ invoke }) => {
+      invoke('terminal_write', { sessionId: activeSessionId, data }).catch(() => {});
+    });
   }
 
   function handleVirtualKey(key: string) {
@@ -118,6 +140,9 @@
       const { invoke } = await import('@tauri-apps/api/core');
       const { listen } = await import('@tauri-apps/api/event');
 
+      unlistenData?.();
+      unlistenExit?.();
+
       unlistenData = await listen<string>(`terminal-data:${activeSessionId}`, (event) => {
         term?.write(event.payload);
       });
@@ -145,77 +170,11 @@
       });
 
       connectionState = 'connected';
+      recordSessionLog();
     } catch (err: unknown) {
       connectionState = 'error';
-      errorMessage = err instanceof Error ? err.message : String(err);
+      errorMessage = formatErrorMessage(err, 'Failed to start terminal session');
       term?.writeln(`\r\n\x1b[1;31m● Connection error: ${errorMessage}\x1b[0m\r\n`);
-    }
-  }
-
-  function connectWebSocket() {
-    connectionState = 'connecting';
-    errorMessage = null;
-
-    if (config?.address) {
-      term?.writeln(`\x1b[1;36mConnecting to ${config.address}:${config.port || 22}...\x1b[0m\r\n`);
-    }
-
-    try {
-      const wsUrl = api.getTerminalWsUrl(activeSessionId);
-      ws = new WebSocket(wsUrl);
-      ws.binaryType = 'arraybuffer';
-
-      ws.onopen = () => {
-        connectionState = 'connected';
-        
-        // Send initial handshake payload to trigger backend SSH connection
-        const initPayload = {
-          type: 'init',
-          host: config?.address || '127.0.0.1',
-          port: config?.port || 22,
-          username: config?.username || 'root',
-          authType: config?.authType || 'password',
-          password: config?.password || '',
-          privateKey: config?.privateKey || '',
-          passphrase: config?.passphrase || '',
-          cols: term?.cols || 80,
-          rows: term?.rows || 24
-        };
-        ws?.send(JSON.stringify(initPayload));
-      };
-
-      ws.onmessage = (event) => {
-        if (event.data instanceof ArrayBuffer) {
-          term?.write(new Uint8Array(event.data));
-        } else {
-          term?.write(event.data);
-        }
-      };
-
-      ws.onerror = () => {
-        connectionState = 'error';
-        errorMessage = 'WebSocket connection failed. Verify OpenTermius gateway is running.';
-        term?.writeln(`\r\n\x1b[1;31m● ${errorMessage}\x1b[0m\r\n`);
-      };
-
-      ws.onclose = () => {
-        if (connectionState === 'connected') {
-          connectionState = 'disconnected';
-          term?.writeln('\r\n\x1b[1;31m● Session disconnected from server.\x1b[0m\r\n');
-        }
-      };
-    } catch (err: unknown) {
-      connectionState = 'error';
-      errorMessage = err instanceof Error ? err.message : 'Unknown connection error';
-      term?.writeln(`\r\n\x1b[1;31m● ${errorMessage}\x1b[0m\r\n`);
-    }
-  }
-
-  function establishConnection() {
-    if (isNativeApp) {
-      connectNative();
-    } else {
-      connectWebSocket();
     }
   }
 
@@ -253,26 +212,14 @@
       } catch {}
     }, 20);
 
-    // Stream user input in-memory via Native IPC in Tauri or WebSocket on web
     term.onData((data) => {
-      if (isNativeApp) {
-        import('@tauri-apps/api/core').then(({ invoke }) => {
-          invoke('terminal_write', { sessionId: activeSessionId, data }).catch(() => {});
-        });
-      } else if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(data);
-      }
+      sendTerminalInput(data);
     });
 
-    // Handle terminal resize events
     term.onResize(({ cols, rows }) => {
-      if (isNativeApp) {
-        import('@tauri-apps/api/core').then(({ invoke }) => {
-          invoke('terminal_resize', { sessionId: activeSessionId, cols, rows }).catch(() => {});
-        });
-      } else if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'resize', cols, rows }));
-      }
+      import('@tauri-apps/api/core').then(({ invoke }) => {
+        invoke('terminal_resize', { sessionId: activeSessionId, cols, rows }).catch(() => {});
+      });
     });
 
     // Auto-fit on window resize
@@ -283,18 +230,30 @@
     });
     resizeObserver.observe(terminalContainer);
 
-    establishConnection();
+    const handleSnippetEvent = (e: Event) => {
+      if (!active || isSplitPane) return;
+      const script = (e as CustomEvent<{ script: string }>).detail?.script;
+      if (script) {
+        sendTerminalInput(script.endsWith('\n') ? script : `${script}\n`);
+        term?.focus();
+      }
+    };
+    window.addEventListener('opentermius:run-snippet', handleSnippetEvent);
+
+    connectNative();
+
+    return () => {
+      window.removeEventListener('opentermius:run-snippet', handleSnippetEvent);
+    };
   });
 
   onDestroy(() => {
-    if (isNativeApp) {
-      import('@tauri-apps/api/core').then(({ invoke }) => {
-        invoke('terminal_close', { sessionId: activeSessionId }).catch(() => {});
-      });
-      unlistenData?.();
-      unlistenExit?.();
-    }
-    ws?.close();
+    finalizeSessionLog();
+    import('@tauri-apps/api/core').then(({ invoke }) => {
+      invoke('terminal_close', { sessionId: activeSessionId }).catch(() => {});
+    });
+    unlistenData?.();
+    unlistenExit?.();
     resizeObserver?.disconnect();
     term?.dispose();
   });
@@ -304,14 +263,12 @@
   }
 
   function handleReconnect() {
-    if (isNativeApp) {
-      connectNative();
-    } else {
-      if (ws) {
-        ws.close();
-      }
-      connectWebSocket();
-    }
+    import('@tauri-apps/api/core')
+      .then(({ invoke }) => invoke('terminal_close', { sessionId: activeSessionId }))
+      .catch(() => {})
+      .finally(() => {
+        connectNative();
+      });
   }
 </script>
 
@@ -413,7 +370,7 @@
       <div class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#0a0a0c]/80 backdrop-blur-xs gap-3">
         <RefreshCw class="h-6 w-6 animate-spin text-emerald-400" />
         <p class="text-xs font-medium text-neutral-300">
-          {isNativeApp ? 'Initiating native outbound SSH connection...' : 'Connecting to gateway WebSocket...'}
+          {config?.address ? 'Initiating native SSH connection...' : 'Opening local terminal shell...'}
         </p>
       </div>
     {:else if connectionState === 'error'}

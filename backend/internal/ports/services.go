@@ -12,6 +12,8 @@ type AuthService interface {
 	Login(ctx context.Context, email, password string) (*domain.User, string, error)
 	ValidateToken(ctx context.Context, tokenString string) (uuid.UUID, error)
 	GetProfile(ctx context.Context, userID uuid.UUID) (*domain.User, error)
+	ListUsers(ctx context.Context) ([]domain.User, error)
+	DeleteUser(ctx context.Context, userID uuid.UUID) error
 }
 
 type VaultService interface {

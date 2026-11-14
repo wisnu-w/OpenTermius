@@ -59,36 +59,281 @@ export interface SftpHostConfig {
   passphrase?: string;
 }
 
+type SyncQueueOp =
+  | {
+      op: 'create';
+      vaultId: string;
+      tempId: string;
+      item: {
+        kind: 'host' | 'key' | 'identity' | 'snippet' | 'tunnel';
+        label: string;
+        ciphertext: string;
+        nonce: string;
+      };
+    }
+  | {
+      op: 'update';
+      vaultId: string;
+      itemId: string;
+      item: {
+        label: string;
+        ciphertext: string;
+        nonce: string;
+      };
+    }
+  | {
+      op: 'delete';
+      vaultId: string;
+      itemId: string;
+    }
+  | {
+      op: 'move';
+      sourceVaultId: string;
+      itemId: string;
+      targetVaultId: string;
+    };
+
+const GW_USER_CACHE_KEY = 'opentermius_gw_user_cache';
+const GW_VAULTS_CACHE_KEY = 'opentermius_gw_vaults_cache';
+const GW_ITEMS_CACHE_PREFIX = 'opentermius_gw_items_cache_';
+const GW_SYNC_QUEUE_KEY = 'opentermius_gw_sync_queue';
+
 class ApiClient {
   private token: string | null = null;
   private apiBase: string = 'http://localhost:8080/api/v1';
-  private wsBase: string = 'ws://localhost:8080/ws';
   private standalone: boolean = false;
+  private isFlushing: boolean = false;
+  private onSyncListeners: Set<(syncedCount: number) => void> = new Set();
 
   constructor() {
     if (typeof window !== 'undefined') {
       this.token = localStorage.getItem('opentermius_jwt_token');
       this.apiBase = localStorage.getItem('opentermius_api_base') || 'http://localhost:8080/api/v1';
-      this.wsBase = localStorage.getItem('opentermius_ws_base') || 'ws://localhost:8080/ws';
       this.standalone = localStorage.getItem('opentermius_mode') === 'standalone';
+      window.addEventListener('online', () => {
+        if (!this.standalone && this.token) {
+          void this.flushSyncQueue();
+        }
+      });
     }
   }
 
-  setGateway(apiBase: string, wsBase: string) {
+  onSyncComplete(cb: (syncedCount: number) => void): () => void {
+    this.onSyncListeners.add(cb);
+    return () => this.onSyncListeners.delete(cb);
+  }
+
+  getPendingSyncCount(): number {
+    return this.readSyncQueue().length;
+  }
+
+  private isNetworkError(err: unknown): boolean {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return true;
+    if (err instanceof TypeError) return true;
+    const msg = err instanceof Error ? err.message : String(err);
+    return /failed to fetch|networkerror|load failed|network request failed|econnrefused|timed out|timeout/i.test(msg);
+  }
+
+  private readJson<T>(key: string, fallback: T): T {
+    if (typeof window === 'undefined') return fallback;
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as T) : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  private writeJson(key: string, value: unknown) {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+
+  private readSyncQueue(): SyncQueueOp[] {
+    return this.readJson<SyncQueueOp[]>(GW_SYNC_QUEUE_KEY, []);
+  }
+
+  private writeSyncQueue(queue: SyncQueueOp[]) {
+    this.writeJson(GW_SYNC_QUEUE_KEY, queue);
+  }
+
+  private readGatewayItemsCache(vaultId: string): ApiVaultItem[] {
+    return this.readJson<ApiVaultItem[]>(`${GW_ITEMS_CACHE_PREFIX}${vaultId}`, []);
+  }
+
+  private writeGatewayItemsCache(vaultId: string, items: ApiVaultItem[]) {
+    this.writeJson(`${GW_ITEMS_CACHE_PREFIX}${vaultId}`, items);
+  }
+
+  private enqueueOfflineOp(op: SyncQueueOp) {
+    const queue = this.readSyncQueue();
+    if (op.op === 'update' && op.itemId.startsWith('local-pending-')) {
+      const createIdx = queue.findIndex((q) => q.op === 'create' && q.tempId === op.itemId);
+      if (createIdx !== -1) {
+        const existing = queue[createIdx] as Extract<SyncQueueOp, { op: 'create' }>;
+        existing.item = { ...existing.item, ...op.item };
+        this.writeSyncQueue(queue);
+        return;
+      }
+    }
+    if (op.op === 'delete' && op.itemId.startsWith('local-pending-')) {
+      const filtered = queue.filter((q) => !(q.op === 'create' && q.tempId === op.itemId) && !('itemId' in q && q.itemId === op.itemId));
+      this.writeSyncQueue(filtered);
+      return;
+    }
+    if (op.op === 'move' && op.itemId.startsWith('local-pending-')) {
+      const createIdx = queue.findIndex((q) => q.op === 'create' && q.tempId === op.itemId);
+      if (createIdx !== -1) {
+        const existing = queue[createIdx] as Extract<SyncQueueOp, { op: 'create' }>;
+        existing.vaultId = op.targetVaultId;
+        this.writeSyncQueue(queue);
+        return;
+      }
+    }
+    queue.push(op);
+    this.writeSyncQueue(queue);
+  }
+
+  async flushSyncQueue(): Promise<number> {
+    if (this.standalone || !this.token || this.isFlushing) return 0;
+    const queue = this.readSyncQueue();
+    if (queue.length === 0) return 0;
+
+    this.isFlushing = true;
+    let syncedCount = 0;
+    const idMap = new Map<string, string>();
+    const remaining: SyncQueueOp[] = [];
+
+    try {
+      for (let i = 0; i < queue.length; i++) {
+        const op = queue[i];
+        try {
+          if (op.op === 'create') {
+            const created = await this.request<ApiVaultItem>(`/vaults/${op.vaultId}/items`, {
+              method: 'POST',
+              body: JSON.stringify(op.item)
+            });
+            idMap.set(op.tempId, created.id);
+            const cached = this.readGatewayItemsCache(op.vaultId);
+            this.writeGatewayItemsCache(
+              op.vaultId,
+              cached.map((c) => (c.id === op.tempId ? created : c))
+            );
+            syncedCount++;
+          } else if (op.op === 'update') {
+            const targetId = idMap.get(op.itemId) ?? op.itemId;
+            await this.request<ApiVaultItem>(`/vaults/${op.vaultId}/items/${targetId}`, {
+              method: 'PUT',
+              body: JSON.stringify(op.item)
+            });
+            syncedCount++;
+          } else if (op.op === 'delete') {
+            const targetId = idMap.get(op.itemId) ?? op.itemId;
+            await this.request<{ status: string }>(`/vaults/${op.vaultId}/items/${targetId}`, {
+              method: 'DELETE'
+            });
+            syncedCount++;
+          } else if (op.op === 'move') {
+            const targetId = idMap.get(op.itemId) ?? op.itemId;
+            await this.request<{ status: string }>(`/vaults/${op.sourceVaultId}/items/${targetId}/move`, {
+              method: 'PUT',
+              body: JSON.stringify({ target_vault_id: op.targetVaultId })
+            });
+            syncedCount++;
+          }
+        } catch (err) {
+          if (this.isNetworkError(err)) {
+            remaining.push(...queue.slice(i));
+            break;
+          }
+          // Non-network error (e.g. item already deleted): drop stale op
+        }
+      }
+      this.writeSyncQueue(remaining);
+      if (syncedCount > 0) {
+        this.onSyncListeners.forEach((cb) => cb(syncedCount));
+      }
+      return syncedCount;
+    } finally {
+      this.isFlushing = false;
+    }
+  }
+
+  async syncStandaloneToGateway(): Promise<number> {
+    if (this.standalone || !this.token || typeof window === 'undefined') return 0;
+
+    const localVaults = this.readJson<ApiVault[]>('opentermius_local_vaults', []);
+    const vaultIds = localVaults.length > 0 ? localVaults.map((v) => v.id) : ['local-vault-primary'];
+
+    const localItemsByVault = vaultIds
+      .map((id) => ({
+        vaultId: id,
+        items: this.readJson<ApiVaultItem[]>(`opentermius_local_items_${id}`, [])
+      }))
+      .filter((entry) => entry.items.length > 0);
+
+    if (localItemsByVault.length === 0) return 0;
+
+    let gwVaults = await this.request<ApiVault[]>('/vaults');
+    let personalVault = gwVaults.find((v) => v.type === 'personal') ?? gwVaults[0];
+    if (!personalVault) {
+      personalVault = await this.request<ApiVault>('/vaults', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Personal Cloud Vault',
+          type: 'personal',
+          encrypted_key: 'initial-master-vault-key-aes-256'
+        })
+      });
+    }
+
+    const existingItems = await this.request<ApiVaultItem[]>(`/vaults/${personalVault.id}/items`);
+    const existingKeys = new Set(existingItems.map((i) => `${i.kind}:${i.label}:${i.ciphertext}`));
+
+    let migratedCount = 0;
+    for (const entry of localItemsByVault) {
+      const remainingLocal: ApiVaultItem[] = [];
+      for (const item of entry.items) {
+        const dedupeKey = `${item.kind}:${item.label}:${item.ciphertext}`;
+        if (!existingKeys.has(dedupeKey)) {
+          try {
+            await this.request<ApiVaultItem>(`/vaults/${personalVault.id}/items`, {
+              method: 'POST',
+              body: JSON.stringify({
+                kind: item.kind,
+                label: item.label,
+                ciphertext: item.ciphertext,
+                nonce: item.nonce
+              })
+            });
+            existingKeys.add(dedupeKey);
+            migratedCount++;
+          } catch (err) {
+            if (this.isNetworkError(err)) {
+              remainingLocal.push(item);
+            }
+          }
+        }
+      }
+      if (remainingLocal.length === 0) {
+        localStorage.removeItem(`opentermius_local_items_${entry.vaultId}`);
+      } else {
+        this.writeJson(`opentermius_local_items_${entry.vaultId}`, remainingLocal);
+      }
+    }
+
+    return migratedCount;
+  }
+
+  setGateway(apiBase: string) {
     this.apiBase = apiBase.replace(/\/+$/, '');
-    this.wsBase = wsBase.replace(/\/+$/, '');
     if (typeof window !== 'undefined') {
       localStorage.setItem('opentermius_api_base', this.apiBase);
-      localStorage.setItem('opentermius_ws_base', this.wsBase);
     }
   }
 
   getApiBase(): string {
     return this.apiBase;
-  }
-
-  getWsBase(): string {
-    return this.wsBase;
   }
 
   isStandalone(): boolean {
@@ -153,17 +398,7 @@ class ApiClient {
     return response.json() as Promise<T>;
   }
 
-  // Auth Endpoints
-  async register(email: string, password: string, name: string): Promise<AuthResponse> {
-    const res = await this.request<AuthResponse>('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ email, password, name })
-    });
-    this.setToken(res.token);
-    this.setStandalone(false);
-    return res;
-  }
-
+  // Auth Endpoints (Registration is handled exclusively by Gateway Web Console)
   async login(email: string, password: string): Promise<AuthResponse> {
     const res = await this.request<AuthResponse>('/auth/login', {
       method: 'POST',
@@ -178,7 +413,17 @@ class ApiClient {
     if (this.standalone) {
       return { id: 'standalone-local-user', email: 'local@device', name: 'Standalone Operator' };
     }
-    return this.request<{ id: string; email: string; name: string }>('/auth/me');
+    try {
+      const me = await this.request<{ id: string; email: string; name: string }>('/auth/me');
+      this.writeJson(GW_USER_CACHE_KEY, me);
+      return me;
+    } catch (err) {
+      if (this.isNetworkError(err)) {
+        const cached = this.readJson<{ id: string; email: string; name: string } | null>(GW_USER_CACHE_KEY, null);
+        if (cached && this.token) return cached;
+      }
+      throw err;
+    }
   }
 
   // Vault Endpoints
@@ -202,7 +447,18 @@ class ApiClient {
       localStorage.setItem('opentermius_local_vaults', JSON.stringify([initialVault]));
       return [initialVault];
     }
-    return this.request<ApiVault[]>('/vaults');
+    try {
+      await this.flushSyncQueue();
+      const vaults = await this.request<ApiVault[]>('/vaults');
+      this.writeJson(GW_VAULTS_CACHE_KEY, vaults);
+      return vaults;
+    } catch (err) {
+      if (this.isNetworkError(err)) {
+        const cached = this.readJson<ApiVault[]>(GW_VAULTS_CACHE_KEY, []);
+        if (cached.length > 0) return cached;
+      }
+      throw err;
+    }
   }
 
   async createVault(name: string, type: 'personal' | 'team', encryptedKey: string): Promise<ApiVault> {
@@ -241,8 +497,18 @@ class ApiClient {
       }
       return items;
     }
-    const query = kind ? `?kind=${encodeURIComponent(kind)}` : '';
-    return this.request<ApiVaultItem[]>(`/vaults/${vaultId}/items${query}`);
+    try {
+      await this.flushSyncQueue();
+      const allItems = await this.request<ApiVaultItem[]>(`/vaults/${vaultId}/items`);
+      this.writeGatewayItemsCache(vaultId, allItems);
+      return kind ? allItems.filter((i) => i.kind === kind) : allItems;
+    } catch (err) {
+      if (this.isNetworkError(err)) {
+        const cached = this.readGatewayItemsCache(vaultId);
+        return kind ? cached.filter((i) => i.kind === kind) : cached;
+      }
+      throw err;
+    }
   }
 
   async createVaultItem(
@@ -271,10 +537,33 @@ class ApiClient {
       localStorage.setItem(`opentermius_local_items_${vaultId}`, JSON.stringify(items));
       return created;
     }
-    return this.request<ApiVaultItem>(`/vaults/${vaultId}/items`, {
-      method: 'POST',
-      body: JSON.stringify(item)
-    });
+    try {
+      const created = await this.request<ApiVaultItem>(`/vaults/${vaultId}/items`, {
+        method: 'POST',
+        body: JSON.stringify(item)
+      });
+      const cached = this.readGatewayItemsCache(vaultId);
+      this.writeGatewayItemsCache(vaultId, [created, ...cached]);
+      return created;
+    } catch (err) {
+      if (!this.isNetworkError(err)) throw err;
+      const tempId = `local-pending-${crypto.randomUUID()}`;
+      const optimistic: ApiVaultItem = {
+        id: tempId,
+        vault_id: vaultId,
+        kind: item.kind,
+        label: item.label,
+        ciphertext: item.ciphertext,
+        nonce: item.nonce,
+        version: 1,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      const cached = this.readGatewayItemsCache(vaultId);
+      this.writeGatewayItemsCache(vaultId, [optimistic, ...cached]);
+      this.enqueueOfflineOp({ op: 'create', vaultId, tempId, item });
+      return optimistic;
+    }
   }
 
   async updateVaultItem(
@@ -302,10 +591,50 @@ class ApiClient {
         return items[idx];
       }
     }
-    return this.request<ApiVaultItem>(`/vaults/${vaultId}/items/${itemId}`, {
-      method: 'PUT',
-      body: JSON.stringify(item)
-    });
+    try {
+      const updated = await this.request<ApiVaultItem>(`/vaults/${vaultId}/items/${itemId}`, {
+        method: 'PUT',
+        body: JSON.stringify(item)
+      });
+      const cached = this.readGatewayItemsCache(vaultId);
+      this.writeGatewayItemsCache(
+        vaultId,
+        cached.map((c) => (c.id === itemId ? updated : c))
+      );
+      return updated;
+    } catch (err) {
+      if (!this.isNetworkError(err)) throw err;
+      const cached = this.readGatewayItemsCache(vaultId);
+      const idx = cached.findIndex((c) => c.id === itemId);
+      const optimistic: ApiVaultItem = idx !== -1
+        ? {
+            ...cached[idx],
+            label: item.label,
+            ciphertext: item.ciphertext,
+            nonce: item.nonce,
+            version: cached[idx].version + 1,
+            updated_at: new Date().toISOString()
+          }
+        : {
+            id: itemId,
+            vault_id: vaultId,
+            kind: 'host',
+            label: item.label,
+            ciphertext: item.ciphertext,
+            nonce: item.nonce,
+            version: 1,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+      if (idx !== -1) {
+        cached[idx] = optimistic;
+      } else {
+        cached.unshift(optimistic);
+      }
+      this.writeGatewayItemsCache(vaultId, cached);
+      this.enqueueOfflineOp({ op: 'update', vaultId, itemId, item });
+      return optimistic;
+    }
   }
 
   async deleteVaultItem(vaultId: string, itemId: string): Promise<{ status: string }> {
@@ -315,9 +644,20 @@ class ApiClient {
       localStorage.setItem(`opentermius_local_items_${vaultId}`, JSON.stringify(filtered));
       return { status: 'deleted' };
     }
-    return this.request<{ status: string }>(`/vaults/${vaultId}/items/${itemId}`, {
-      method: 'DELETE'
-    });
+    try {
+      const res = await this.request<{ status: string }>(`/vaults/${vaultId}/items/${itemId}`, {
+        method: 'DELETE'
+      });
+      const cached = this.readGatewayItemsCache(vaultId);
+      this.writeGatewayItemsCache(vaultId, cached.filter((c) => c.id !== itemId));
+      return res;
+    } catch (err) {
+      if (!this.isNetworkError(err)) throw err;
+      const cached = this.readGatewayItemsCache(vaultId);
+      this.writeGatewayItemsCache(vaultId, cached.filter((c) => c.id !== itemId));
+      this.enqueueOfflineOp({ op: 'delete', vaultId, itemId });
+      return { status: 'queued' };
+    }
   }
 
   async moveVaultItem(sourceVaultId: string, itemId: string, targetVaultId: string): Promise<{ status: string }> {
@@ -334,10 +674,44 @@ class ApiClient {
       }
       return { status: 'moved' };
     }
-    return this.request<{ status: string }>(`/vaults/${sourceVaultId}/items/${itemId}/move`, {
-      method: 'PUT',
-      body: JSON.stringify({ target_vault_id: targetVaultId })
-    });
+    if (itemId.startsWith('local-pending-')) {
+      const sourceCached = this.readGatewayItemsCache(sourceVaultId);
+      const itemToMove = sourceCached.find((i) => i.id === itemId);
+      this.writeGatewayItemsCache(sourceVaultId, sourceCached.filter((i) => i.id !== itemId));
+      if (itemToMove) {
+        const targetCached = this.readGatewayItemsCache(targetVaultId);
+        this.writeGatewayItemsCache(targetVaultId, [{ ...itemToMove, vault_id: targetVaultId }, ...targetCached]);
+      }
+      this.enqueueOfflineOp({ op: 'move', sourceVaultId, itemId, targetVaultId });
+      void this.flushSyncQueue();
+      return { status: 'moved' };
+    }
+    try {
+      await this.flushSyncQueue();
+      const res = await this.request<{ status: string }>(`/vaults/${sourceVaultId}/items/${itemId}/move`, {
+        method: 'PUT',
+        body: JSON.stringify({ target_vault_id: targetVaultId })
+      });
+      const sourceCached = this.readGatewayItemsCache(sourceVaultId);
+      const itemToMove = sourceCached.find((i) => i.id === itemId);
+      this.writeGatewayItemsCache(sourceVaultId, sourceCached.filter((i) => i.id !== itemId));
+      if (itemToMove) {
+        const targetCached = this.readGatewayItemsCache(targetVaultId);
+        this.writeGatewayItemsCache(targetVaultId, [{ ...itemToMove, vault_id: targetVaultId }, ...targetCached]);
+      }
+      return res;
+    } catch (err) {
+      if (!this.isNetworkError(err)) throw err;
+      const sourceCached = this.readGatewayItemsCache(sourceVaultId);
+      const itemToMove = sourceCached.find((i) => i.id === itemId);
+      this.writeGatewayItemsCache(sourceVaultId, sourceCached.filter((i) => i.id !== itemId));
+      if (itemToMove) {
+        const targetCached = this.readGatewayItemsCache(targetVaultId);
+        this.writeGatewayItemsCache(targetVaultId, [{ ...itemToMove, vault_id: targetVaultId }, ...targetCached]);
+      }
+      this.enqueueOfflineOp({ op: 'move', sourceVaultId, itemId, targetVaultId });
+      return { status: 'queued' };
+    }
   }
 
   // Vault Members & Team Collaboration
@@ -358,126 +732,49 @@ class ApiClient {
     });
   }
 
-  // Terminal WebSocket URL
-  getTerminalWsUrl(hostId: string): string {
-    const token = this.token || '';
-    return `${this.wsBase}/terminal/${hostId}?token=${encodeURIComponent(token)}`;
-  }
-
-  // SFTP File Manager Operations
-  async sftpList(config: SftpHostConfig, path: string = ''): Promise<{ path: string; items: ApiSftpFile[] }> {
-    const payload = {
-      host: config.address,
+  // Native SFTP File Manager Operations (via Tauri Rust russh-sftp)
+  private toNativeSftpConfig(config: SftpHostConfig) {
+    return {
+      address: config.address,
       port: config.port || 22,
       username: config.username,
-      authType: config.authType || 'password',
       password: config.password || '',
       privateKey: config.privateKey || '',
-      passphrase: config.passphrase || '',
-      path
+      passphrase: config.passphrase || ''
     };
+  }
 
-    const token = this.token || 'standalone';
-    const response = await fetch(`${this.apiBase}/sftp/list`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(payload)
+  async sftpList(config: SftpHostConfig, path: string = ''): Promise<{ path: string; items: ApiSftpFile[] }> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<{ path: string; items: ApiSftpFile[] }>('sftp_list', {
+      config: this.toNativeSftpConfig(config),
+      path
     });
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({ error: 'SFTP connection failed' }));
-      throw new Error(err.error || 'SFTP connection failed');
-    }
-    return response.json();
   }
 
   async sftpMkdir(config: SftpHostConfig, path: string): Promise<void> {
-    const payload = {
-      host: config.address,
-      port: config.port || 22,
-      username: config.username,
-      authType: config.authType || 'password',
-      password: config.password || '',
-      privateKey: config.privateKey || '',
-      passphrase: config.passphrase || '',
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('sftp_mkdir', {
+      config: this.toNativeSftpConfig(config),
       path
-    };
-
-    const token = this.token || 'standalone';
-    const response = await fetch(`${this.apiBase}/sftp/mkdir`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(payload)
     });
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({ error: 'Failed to create directory' }));
-      throw new Error(err.error || 'Failed to create directory');
-    }
   }
 
   async sftpDelete(config: SftpHostConfig, path: string): Promise<void> {
-    const payload = {
-      host: config.address,
-      port: config.port || 22,
-      username: config.username,
-      authType: config.authType || 'password',
-      password: config.password || '',
-      privateKey: config.privateKey || '',
-      passphrase: config.passphrase || '',
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('sftp_delete', {
+      config: this.toNativeSftpConfig(config),
       path
-    };
-
-    const token = this.token || 'standalone';
-    const response = await fetch(`${this.apiBase}/sftp/delete`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(payload)
     });
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({ error: 'Failed to delete remote item' }));
-      throw new Error(err.error || 'Failed to delete remote item');
-    }
   }
 
   async sftpDownloadBlob(config: SftpHostConfig, path: string): Promise<Blob> {
-    const payload = {
-      host: config.address,
-      port: config.port || 22,
-      username: config.username,
-      authType: config.authType || 'password',
-      password: config.password || '',
-      privateKey: config.privateKey || '',
-      passphrase: config.passphrase || '',
+    const { invoke } = await import('@tauri-apps/api/core');
+    const bytes = await invoke<number[]>('sftp_read_bytes', {
+      config: this.toNativeSftpConfig(config),
       path
-    };
-
-    const token = this.token || 'standalone';
-    const response = await fetch(`${this.apiBase}/sftp/download`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(payload)
     });
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({ error: 'Download failed' }));
-      throw new Error(err.error || 'Download failed');
-    }
-
-    return response.blob();
+    return new Blob([new Uint8Array(bytes)]);
   }
 
   async sftpDownload(config: SftpHostConfig, path: string, filename: string): Promise<void> {
@@ -493,30 +790,15 @@ class ApiClient {
   }
 
   async sftpUpload(config: SftpHostConfig, remotePath: string, file: File): Promise<void> {
-    const formData = new FormData();
-    formData.append('host', config.address);
-    formData.append('port', (config.port || 22).toString());
-    formData.append('username', config.username);
-    formData.append('authType', config.authType || 'password');
-    formData.append('password', config.password || '');
-    formData.append('privateKey', config.privateKey || '');
-    formData.append('passphrase', config.passphrase || '');
-    formData.append('remotePath', remotePath);
-    formData.append('file', file);
-
-    const token = this.token || 'standalone';
-    const response = await fetch(`${this.apiBase}/sftp/upload`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      },
-      body: formData
+    const { invoke } = await import('@tauri-apps/api/core');
+    const base = remotePath.endsWith('/') ? remotePath.slice(0, -1) : remotePath;
+    const targetPath = `${base}/${file.name}`;
+    const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
+    await invoke('sftp_write_bytes', {
+      config: this.toNativeSftpConfig(config),
+      path: targetPath,
+      data: bytes
     });
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({ error: 'Upload failed' }));
-      throw new Error(err.error || 'Upload failed');
-    }
   }
 }
 

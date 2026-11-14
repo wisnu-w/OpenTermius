@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api, type ApiSftpFile, type SftpHostConfig } from '../api/client';
   import { platform } from '../stores/platform.svelte';
+  import { toast } from '../stores/toast.svelte';
   import SftpPane, { type SftpHostItem } from './SftpPane.svelte';
   import { ArrowRight, ArrowLeft, Copy, Scissors } from 'lucide-svelte';
 
@@ -127,7 +128,7 @@
       rightSelection = [];
       refreshCounter += 1;
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Transfer failed');
+      toast.error(err, 'Transfer failed');
     } finally {
       isTransferring = false;
       transferStatus = null;

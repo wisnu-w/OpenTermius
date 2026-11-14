@@ -209,14 +209,14 @@
   <div class="mt-4 pt-3 border-t border-[#1e1e28] flex items-center gap-1.5">
     <button
       onclick={() => onConnect(host)}
-      class="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600/90 py-1.5 px-2.5 text-xs font-semibold text-white shadow hover:bg-emerald-500 transition-colors active:scale-[0.98]"
+      class="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600/90 {platform.isHandheld ? 'py-2 px-3' : 'py-1.5 px-2.5'} text-xs font-semibold text-white shadow hover:bg-emerald-500 transition-colors active:scale-[0.98]"
     >
       <Zap class="h-3.5 w-3.5" /> Connect SSH
     </button>
     {#if onOpenSftp}
       <button
         onclick={() => onOpenSftp(host)}
-        class="flex items-center justify-center gap-1 rounded-lg bg-[#20202d] px-2.5 py-1.5 text-xs font-medium text-neutral-300 hover:text-emerald-400 hover:bg-[#28283a] transition-colors"
+        class="flex items-center justify-center gap-1 rounded-lg bg-[#20202d] {platform.isHandheld ? 'px-3 py-2' : 'px-2.5 py-1.5'} text-xs font-medium text-neutral-300 hover:text-emerald-400 hover:bg-[#28283a] transition-colors"
         title="Open SFTP File Browser"
       >
         <Folder class="h-3.5 w-3.5 text-amber-400" />
@@ -226,7 +226,7 @@
     {#if onEdit}
       <button
         onclick={() => onEdit(host)}
-        class="flex items-center justify-center rounded-lg bg-[#20202d] p-2 text-neutral-400 hover:text-white hover:bg-[#28283a] transition-colors"
+        class="flex items-center justify-center rounded-lg bg-[#20202d] {platform.isHandheld ? 'p-2.5' : 'p-2'} text-neutral-400 hover:text-white hover:bg-[#28283a] transition-colors"
         title="Edit Host"
       >
         <Pencil class="h-3.5 w-3.5" />
@@ -235,7 +235,7 @@
     {#if onMove}
       <button
         onclick={() => onMove(host)}
-        class="flex items-center justify-center rounded-lg bg-[#20202d] p-2 text-neutral-400 hover:text-indigo-400 hover:bg-[#28283a] transition-colors"
+        class="flex items-center justify-center rounded-lg bg-[#20202d] {platform.isHandheld ? 'p-2.5' : 'p-2'} text-neutral-400 hover:text-indigo-400 hover:bg-[#28283a] transition-colors"
         title="Move to Folder or Vault"
       >
         <FolderInput class="h-3.5 w-3.5" />
@@ -244,7 +244,7 @@
     {#if onDelete}
       <button
         onclick={() => onDelete(host)}
-        class="flex items-center justify-center rounded-lg bg-[#20202d] p-2 text-neutral-400 hover:text-rose-400 hover:bg-[#28283a] transition-colors"
+        class="flex items-center justify-center rounded-lg bg-[#20202d] {platform.isHandheld ? 'p-2.5' : 'p-2'} text-neutral-400 hover:text-rose-400 hover:bg-[#28283a] transition-colors"
         title="Delete Host"
       >
         <Trash2 class="h-3.5 w-3.5" />

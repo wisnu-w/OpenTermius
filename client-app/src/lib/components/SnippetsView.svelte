@@ -1,14 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, type ApiVaultItem, type ApiVault } from '../api/client';
+  import { toast, formatErrorMessage } from '../stores/toast.svelte';
   import { encryptVaultItem, decryptVaultItem } from '../crypto/vault';
   import { FileCode2, Play, Plus, RefreshCw, AlertCircle, Sparkles } from 'lucide-svelte';
 
   interface Props {
     activeVaultId?: string;
+    onRunSnippet?: (script: string) => void;
   }
 
-  let { activeVaultId }: Props = $props();
+  let { activeVaultId, onRunSnippet }: Props = $props();
 
   let state = $state<'loading' | 'success' | 'empty' | 'error'>('loading');
   let errorMessage = $state<string | null>(null);
@@ -58,7 +60,7 @@
       state = 'success';
     } catch (err: unknown) {
       state = 'error';
-      errorMessage = err instanceof Error ? err.message : 'Failed to fetch snippets from backend';
+      errorMessage = formatErrorMessage(err, 'Failed to fetch snippets from backend');
     }
   }
 
@@ -90,42 +92,50 @@
       newTitle = '';
       newScript = '';
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to save snippet');
+      toast.error(err, 'Failed to save snippet');
     }
   }
+
+  $effect(() => {
+    if (activeVaultId !== undefined) {
+      loadSnippets();
+    }
+  });
 
   onMount(() => {
     loadSnippets();
   });
 </script>
 
-<div class="h-full overflow-y-auto p-6 space-y-6">
-  <div class="flex items-center justify-between">
-    <div>
-      <div class="flex items-center gap-2">
-        <h2 class="text-lg font-bold text-white">Startup Snippets & Automation</h2>
-        <span class="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-xs text-emerald-400 font-medium">
-          Free Automation
+<div class="h-full overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#22222a] pb-4">
+    <div class="min-w-0">
+      <div class="flex items-center gap-2 flex-wrap">
+        <h2 class="text-base font-bold text-white tracking-tight">Snippets</h2>
+        <span class="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
+          Shell Automation
         </span>
       </div>
       <p class="text-xs text-neutral-400 mt-1">
-        Execute shell commands and automated diagnostics automatically on SSH connection start.
+        Save reusable shell commands and run them in your active terminal.
       </p>
     </div>
 
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2 shrink-0">
       <button
+        type="button"
         onclick={loadSnippets}
-        class="flex items-center gap-1.5 rounded-lg border border-[#22222a] bg-[#14141a] px-3 py-1.5 text-xs text-neutral-300 hover:text-white transition"
+        class="flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-lg border border-[#22222a] bg-[#14141d] px-3 py-2 sm:py-1.5 text-xs text-neutral-300 hover:text-white transition"
       >
         <RefreshCw class="h-3.5 w-3.5" /> Refresh
       </button>
 
       <button
+        type="button"
         onclick={() => (isCreating = !isCreating)}
-        class="flex items-center gap-2 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow hover:bg-emerald-500 transition"
+        class="flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 sm:py-1.5 text-xs font-semibold text-white shadow hover:bg-emerald-500 transition"
       >
-        <Plus class="h-4 w-4" /> Create Snippet
+        <Plus class="h-4 w-4" /> New Snippet
       </button>
     </div>
   </div>
@@ -230,8 +240,12 @@
               </span>
             </div>
 
-            <button class="flex items-center gap-1.5 rounded bg-[#1e1e28] px-2.5 py-1 text-xs font-medium text-emerald-400 hover:bg-[#252533] transition">
-              <Play class="h-3 w-3" /> Run in Terminal
+            <button
+              type="button"
+              onclick={() => onRunSnippet?.(snippet.script)}
+              class="flex items-center gap-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-3 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/25 active:scale-95 transition shrink-0"
+            >
+              <Play class="h-3 w-3" /> Run
             </button>
           </div>
 

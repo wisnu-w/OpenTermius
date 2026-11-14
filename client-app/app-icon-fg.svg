@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="promptGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6EE7B7" />
+      <stop offset="45%" stop-color="#10B981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <linearGradient id="cursorGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#34D399" />
+      <stop offset="100%" stop-color="#22D3EE" />
+    </linearGradient>
+    <linearGradient id="hexGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10B981" stop-opacity="0.65" />
+      <stop offset="50%" stop-color="#22D3EE" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#10B981" stop-opacity="0.7" />
+    </linearGradient>
+  </defs>
+
+  <!-- Open-Source Hexagonal Network Arc -->
+  <path
+    d="M 356 764 L 228 690 L 228 366 L 512 202 L 796 366 L 796 690 L 668 764"
+    fill="none"
+    stroke="url(#hexGrad)"
+    stroke-width="16"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Open-Source Decentralized Nodes on Hexagon Vertices -->
+  <circle cx="512" cy="202" r="24" fill="#0B0F17" stroke="#34D399" stroke-width="11" />
+  <circle cx="228" cy="366" r="20" fill="#0B0F17" stroke="#10B981" stroke-width="10" />
+  <circle cx="796" cy="366" r="20" fill="#0B0F17" stroke="#22D3EE" stroke-width="10" />
+  <circle cx="356" cy="764" r="18" fill="#10B981" />
+  <circle cx="668" cy="764" r="18" fill="#22D3EE" />
+
+  <!-- Soft Drop Glow Behind Prompt -->
+  <path
+    d="M 316 392 L 504 524 L 316 656"
+    fill="none"
+    stroke="#10B981"
+    stroke-opacity="0.24"
+    stroke-width="96"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <rect
+    x="514"
+    y="606"
+    width="228"
+    height="88"
+    rx="44"
+    fill="#22D3EE"
+    fill-opacity="0.24"
+  />
+
+  <!-- Hero Terminal Chevron (>) -->
+  <path
+    d="M 316 392 L 504 524 L 316 656"
+    fill="none"
+    stroke="url(#promptGrad)"
+    stroke-width="68"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Hero Terminal Underscore Cursor (_) -->
+  <rect
+    x="526"
+    y="618"
+    width="204"
+    height="64"
+    rx="32"
+    fill="url(#cursorGrad)"
+  />
+
+  <!-- Bottom Open-Source Portal Dot -->
+  <circle cx="512" cy="804" r="15" fill="#34D399" fill-opacity="0.9" />
+</svg>

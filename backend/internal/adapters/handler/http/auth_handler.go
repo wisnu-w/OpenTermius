@@ -94,3 +94,63 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, user)
 }
+
+func (h *AuthHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := h.authService.ListUsers(r.Context())
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "failed to list users")
+		return
+	}
+	if users == nil {
+		users = []domain.User{}
+	}
+	writeJSON(w, http.StatusOK, users)
+}
+
+func (h *AuthHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
+	var req registerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	user, _, err := h.authService.Register(r.Context(), req.Email, req.Password, req.Name)
+	if err != nil {
+		if errors.Is(err, domain.ErrConflict) {
+			writeJSONError(w, http.StatusConflict, "email already registered")
+			return
+		}
+		if errors.Is(err, domain.ErrInvalidInput) {
+			writeJSONError(w, http.StatusBadRequest, "email, password, and name are required")
+			return
+		}
+		writeJSONError(w, http.StatusInternalServerError, "failed to create user")
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, user)
+}
+
+func (h *AuthHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	callerID := getUserID(r)
+	targetID, err := parseUUID(r.PathValue("id"))
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+	if callerID == targetID {
+		writeJSONError(w, http.StatusBadRequest, "cannot delete your own active admin account")
+		return
+	}
+
+	if err := h.authService.DeleteUser(r.Context(), targetID); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeJSONError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		writeJSONError(w, http.StatusInternalServerError, "failed to delete user")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}

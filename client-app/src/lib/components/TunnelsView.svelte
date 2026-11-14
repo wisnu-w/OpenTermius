@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { toast } from '../stores/toast.svelte';
   import {
     Network,
     Plus,
@@ -221,7 +222,7 @@
       tunnels = tunnels.filter((t) => t.id !== id);
       if (tunnels.length === 0) loadState = 'empty';
     } catch (err: unknown) {
-      alert('Delete failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      toast.error(err, 'Failed to delete tunnel');
     }
   }
 
@@ -255,26 +256,26 @@
   });
 </script>
 
-<div class="flex h-full flex-col p-6 overflow-y-auto space-y-6">
+<div class="flex h-full flex-col p-4 sm:p-6 overflow-y-auto space-y-4 sm:space-y-6">
   <!-- Header Banner -->
-  <div class="flex items-center justify-between border-b border-[#22222a] pb-4">
-    <div>
-      <div class="flex items-center gap-2">
-        <h2 class="text-base font-bold text-white tracking-tight">Port Forwarding & Proxies</h2>
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#22222a] pb-4">
+    <div class="min-w-0">
+      <div class="flex items-center gap-2 flex-wrap">
+        <h2 class="text-base font-bold text-white tracking-tight">Port Forwarding</h2>
         <span class="rounded bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400 border border-emerald-500/20">
-          Native Tunneling
+          SSH Tunnel
         </span>
       </div>
       <p class="text-xs text-neutral-400 mt-1">
-        Local Port Forwarding, Remote Tunnels, and Dynamic SOCKS5 Proxies routed through secure SSH bastions.
+        Forward local ports, remote ports, or a SOCKS5 proxy over SSH.
       </p>
     </div>
 
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2 shrink-0">
       <button
         type="button"
         onclick={loadTunnels}
-        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#22222a] bg-[#14141d] hover:bg-[#181824] text-neutral-300 text-xs transition"
+        class="flex flex-1 sm:flex-none items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg border border-[#22222a] bg-[#14141d] hover:bg-[#181824] text-neutral-300 text-xs transition"
       >
         <RefreshCw class="w-3.5 h-3.5" />
         Refresh
@@ -282,7 +283,7 @@
       <button
         type="button"
         onclick={openAddModal}
-        class="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition"
+        class="flex flex-1 sm:flex-none items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition"
       >
         <Plus class="w-4 h-4" />
         New Tunnel
@@ -301,14 +302,14 @@
       {errorMessage}
     </div>
   {:else if loadState === 'empty'}
-    <div class="flex h-64 flex-col items-center justify-center text-center p-8 space-y-3 rounded-2xl border border-dashed border-[#22222f] bg-[#121218]">
+    <div class="flex min-h-56 flex-col items-center justify-center text-center p-6 sm:p-8 space-y-3 rounded-2xl border border-dashed border-[#22222f] bg-[#121218]">
       <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
         <Network class="w-6 h-6" />
       </div>
       <div>
-        <h4 class="text-sm font-semibold text-white">No Port Forwarding Rules Yet</h4>
+        <h4 class="text-sm font-semibold text-white">No tunnels yet</h4>
         <p class="text-xs text-neutral-400 mt-1 max-w-sm">
-          Tunnel database ports, internal web services, or create a dynamic SOCKS5 proxy through your bastion servers.
+          Forward database ports, internal apps, or a SOCKS5 proxy over SSH.
         </p>
       </div>
       <button
@@ -317,7 +318,7 @@
         class="mt-2 flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition shadow"
       >
         <Plus class="w-4 h-4" />
-        Configure First Tunnel
+        Add Tunnel
       </button>
     </div>
   {:else}
@@ -371,7 +372,7 @@
                 </div>
                 <ArrowRight class="w-3.5 h-3.5 text-neutral-500 shrink-0" />
                 <div class="text-right text-neutral-300 truncate">
-                  <span class="text-neutral-500 text-[10px] block font-sans">Remote Destination</span>
+                  <span class="text-neutral-500 text-[10px] block font-sans">Remote</span>
                   {tunnel.remoteHost}:{tunnel.remotePort}
                 </div>
               </div>
@@ -412,78 +413,79 @@
 
 <!-- Add Tunnel Modal -->
 {#if showModal}
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-    <div class="w-full max-w-md rounded-2xl border border-[#262635] bg-[#14141d] p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 overflow-y-auto">
+    <div class="w-full max-w-md max-h-[85dvh] overflow-y-auto rounded-2xl border border-[#262635] bg-[#14141d] p-4 sm:p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150 my-auto">
       <div class="flex items-center justify-between border-b border-[#22222e] pb-3">
         <div class="flex items-center gap-2.5">
           <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
             <Network class="w-4 h-4" />
           </div>
           <div>
-            <h3 class="text-sm font-bold text-white">Create Port Forwarding Rule</h3>
-            <p class="text-[11px] text-neutral-400">Tunnel TCP traffic through an encrypted SSH bastion.</p>
+            <h3 class="text-sm font-bold text-white">New Tunnel</h3>
+            <p class="text-[11px] text-neutral-400">Route TCP traffic through an SSH host.</p>
           </div>
         </div>
         <button
           type="button"
           onclick={() => (showModal = false)}
-          class="text-neutral-400 hover:text-white text-sm"
+          class="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:text-white active:bg-[#1e1e2c] text-sm transition"
+          aria-label="Close"
         >
           ✕
         </button>
       </div>
 
       {#if formError}
-        <div class="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-xs text-rose-300">
+        <div class="rounded-xl border border-rose-500/30 bg-rose-500/10 p-2.5 text-xs text-rose-300">
           {formError}
         </div>
       {/if}
 
       <div class="space-y-3.5 text-xs">
         <div>
-          <label for="tunnel-label-input" class="block text-neutral-300 font-medium mb-1">Tunnel Name / Label</label>
+          <label for="tunnel-label-input" class="block text-neutral-300 font-medium mb-1.5">Label</label>
           <input
             id="tunnel-label-input"
             type="text"
             bind:value={newLabel}
-            placeholder="e.g. Postgres Staging, Redis Local, Internal Admin"
-            class="w-full rounded-lg border border-[#22222e] bg-[#0f0f15] px-3 py-2 text-white placeholder-neutral-500 outline-none focus:border-emerald-500"
+            placeholder="e.g. Postgres Staging"
+            class="w-full rounded-xl sm:rounded-lg border border-[#22222e] bg-[#0f0f15] px-3 py-2.5 sm:py-2 text-sm sm:text-xs text-white placeholder-neutral-500 outline-none focus:border-emerald-500"
           />
         </div>
 
         <div>
-          <span class="block text-neutral-300 font-medium mb-1">Forwarding Type</span>
+          <span class="block text-neutral-300 font-medium mb-1.5">Type</span>
           <div class="grid grid-cols-2 gap-2">
             <button
               type="button"
               onclick={() => (newType = 'local')}
-              class="rounded-lg border p-2 text-left transition {newType === 'local' ? 'border-emerald-500 bg-emerald-500/10 text-white' : 'border-[#22222e] bg-[#0f0f15] text-neutral-400 hover:text-white'}"
+              class="rounded-xl sm:rounded-lg border p-2.5 text-left transition {newType === 'local' ? 'border-emerald-500 bg-emerald-500/10 text-white' : 'border-[#22222e] bg-[#0f0f15] text-neutral-400 hover:text-white'}"
             >
-              <div class="font-semibold text-xs">Local Forwarding</div>
-              <div class="text-[10px] text-neutral-400 mt-0.5">Local Port → Remote Server</div>
+              <div class="font-semibold text-xs">Local</div>
+              <div class="text-[10px] text-neutral-400 mt-0.5">Local → Remote</div>
             </button>
             <button
               type="button"
               onclick={() => (newType = 'dynamic')}
-              class="rounded-lg border p-2 text-left transition {newType === 'dynamic' ? 'border-emerald-500 bg-emerald-500/10 text-white' : 'border-[#22222e] bg-[#0f0f15] text-neutral-400 hover:text-white'}"
+              class="rounded-xl sm:rounded-lg border p-2.5 text-left transition {newType === 'dynamic' ? 'border-emerald-500 bg-emerald-500/10 text-white' : 'border-[#22222e] bg-[#0f0f15] text-neutral-400 hover:text-white'}"
             >
-              <div class="font-semibold text-xs">Dynamic SOCKS5</div>
-              <div class="text-[10px] text-neutral-400 mt-0.5">Local SOCKS5 Proxy Server</div>
+              <div class="font-semibold text-xs">SOCKS5</div>
+              <div class="text-[10px] text-neutral-400 mt-0.5">Dynamic proxy</div>
             </button>
           </div>
         </div>
 
         <div>
-          <label for="tunnel-bastion-host" class="block text-neutral-300 font-medium mb-1">Route Through SSH Host (Bastion)</label>
+          <label for="tunnel-bastion-host" class="block text-neutral-300 font-medium mb-1.5">SSH Host</label>
           {#if hosts.length === 0}
-            <div class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-[11px] text-amber-300">
-              No SSH hosts found in vault. Add a host in Hosts inventory first.
+            <div class="rounded-xl sm:rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-[11px] text-amber-300">
+              No hosts yet. Add one in Hosts first.
             </div>
           {:else}
             <select
               id="tunnel-bastion-host"
               bind:value={newHostId}
-              class="w-full rounded-lg border border-[#22222e] bg-[#0f0f15] px-3 py-2 text-white outline-none focus:border-emerald-500"
+              class="w-full rounded-xl sm:rounded-lg border border-[#22222e] bg-[#0f0f15] px-3 py-2.5 sm:py-2 text-sm sm:text-xs text-white outline-none focus:border-emerald-500"
             >
               {#each hosts as host}
                 <option value={host.id}>{host.label} ({host.address})</option>
@@ -494,25 +496,25 @@
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label for="tunnel-local-port" class="block text-neutral-300 font-medium mb-1">Local Port to Listen</label>
+            <label for="tunnel-local-port" class="block text-neutral-300 font-medium mb-1.5">Local Port</label>
             <input
               id="tunnel-local-port"
               type="number"
               bind:value={newLocalPort}
               placeholder="5432"
-              class="w-full rounded-lg border border-[#22222e] bg-[#0f0f15] px-3 py-2 text-white outline-none focus:border-emerald-500 font-mono"
+              class="w-full rounded-xl sm:rounded-lg border border-[#22222e] bg-[#0f0f15] px-3 py-2.5 sm:py-2 text-sm sm:text-xs text-white outline-none focus:border-emerald-500 font-mono"
             />
           </div>
 
           {#if newType === 'local'}
             <div>
-              <label for="tunnel-remote-port" class="block text-neutral-300 font-medium mb-1">Remote Target Port</label>
+              <label for="tunnel-remote-port" class="block text-neutral-300 font-medium mb-1.5">Remote Port</label>
               <input
                 id="tunnel-remote-port"
                 type="number"
                 bind:value={newRemotePort}
                 placeholder="5432"
-                class="w-full rounded-lg border border-[#22222e] bg-[#0f0f15] px-3 py-2 text-white outline-none focus:border-emerald-500 font-mono"
+                class="w-full rounded-xl sm:rounded-lg border border-[#22222e] bg-[#0f0f15] px-3 py-2.5 sm:py-2 text-sm sm:text-xs text-white outline-none focus:border-emerald-500 font-mono"
               />
             </div>
           {/if}
@@ -520,23 +522,23 @@
 
         {#if newType === 'local'}
           <div>
-            <label for="tunnel-remote-host" class="block text-neutral-300 font-medium mb-1">Remote Destination Host</label>
+            <label for="tunnel-remote-host" class="block text-neutral-300 font-medium mb-1.5">Remote Host</label>
             <input
               id="tunnel-remote-host"
               type="text"
               bind:value={newRemoteHost}
-              placeholder="127.0.0.1 or 10.0.1.25"
-              class="w-full rounded-lg border border-[#22222e] bg-[#0f0f15] px-3 py-2 text-white outline-none focus:border-emerald-500 font-mono"
+              placeholder="127.0.0.1"
+              class="w-full rounded-xl sm:rounded-lg border border-[#22222e] bg-[#0f0f15] px-3 py-2.5 sm:py-2 text-sm sm:text-xs text-white outline-none focus:border-emerald-500 font-mono"
             />
           </div>
         {/if}
       </div>
 
-      <div class="flex items-center justify-end gap-2 pt-3 border-t border-[#22222e]">
+      <div class="grid grid-cols-2 sm:flex sm:items-center sm:justify-end gap-2.5 pt-3 border-t border-[#22222e]">
         <button
           type="button"
           onclick={() => (showModal = false)}
-          class="px-3.5 py-1.5 rounded-lg border border-[#22222e] text-neutral-400 hover:text-white text-xs transition"
+          class="px-3.5 py-2.5 sm:py-1.5 rounded-xl sm:rounded-lg border border-[#22222e] text-neutral-300 hover:text-white text-xs font-medium transition"
         >
           Cancel
         </button>
@@ -544,7 +546,7 @@
           type="button"
           onclick={handleSaveTunnel}
           disabled={isSubmitting}
-          class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow transition disabled:opacity-50"
+          class="px-4 py-2.5 sm:py-1.5 rounded-xl sm:rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow transition disabled:opacity-50"
         >
           {isSubmitting ? 'Saving...' : 'Save Tunnel'}
         </button>

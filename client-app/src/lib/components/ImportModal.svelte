@@ -202,8 +202,8 @@
 </script>
 
 {#if isOpen}
-  <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-xs p-0 sm:p-4 overflow-y-auto animate-in fade-in duration-100">
-    <div class="w-full max-w-2xl max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-2xl border border-[#252535] bg-[#12121a] p-4 pb-[calc(1.25rem+var(--sab))] sm:p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-100 sm:my-auto">
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-100">
+    <div class="w-full max-w-2xl max-h-[85dvh] overflow-y-auto rounded-2xl border border-[#252535] bg-[#12121a] p-4 sm:p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-100 my-auto">
       <!-- Modal Header -->
       <div class="flex items-center justify-between border-b border-[#1e1e2d] pb-4">
         <div class="flex items-center gap-2.5">

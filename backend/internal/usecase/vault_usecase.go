@@ -57,7 +57,17 @@ func (v *VaultUseCase) CreateVault(ctx context.Context, ownerID uuid.UUID, name 
 }
 
 func (v *VaultUseCase) ListUserVaults(ctx context.Context, userID uuid.UUID) ([]domain.Vault, error) {
-	return v.vaultRepo.ListByUser(ctx, userID)
+	vaults, err := v.vaultRepo.ListByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if len(vaults) == 0 && userID != uuid.Nil {
+		personal, createErr := v.CreateVault(ctx, userID, "Personal Vault", domain.VaultTypePersonal, "e2ee-personal-vault-key")
+		if createErr == nil && personal != nil {
+			return []domain.Vault{*personal}, nil
+		}
+	}
+	return vaults, nil
 }
 
 func (v *VaultUseCase) GetVault(ctx context.Context, vaultID, userID uuid.UUID) (*domain.Vault, error) {

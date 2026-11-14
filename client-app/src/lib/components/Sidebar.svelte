@@ -69,7 +69,7 @@
 
 {#if isMobileOpen}
   <div
-    class="fixed inset-0 z-40 bg-black/70 backdrop-blur-xs md:hidden animate-in fade-in duration-150"
+    class="fixed inset-0 z-40 bg-black/70 backdrop-blur-xs lg:hidden animate-in fade-in duration-150"
     onclick={onCloseMobile}
     role="button"
     tabindex="0"
@@ -79,18 +79,18 @@
 {/if}
 
 <aside
-  class="flex flex-col justify-between border-r border-[#1c1c25] bg-[#0d0d12] select-none transition-all duration-200 ease-in-out shrink-0
-    fixed inset-y-0 left-0 z-50 w-72 p-4 shadow-2xl md:relative md:z-auto md:shadow-none
-    {platform.isMac && platform.isNativeTauri ? 'md:pt-9' : ''}
-    {isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-    {isCollapsed ? 'md:w-0 md:p-0 md:border-r-0 md:overflow-hidden md:opacity-0 md:pointer-events-none' : 'md:w-60 md:p-3.5 md:opacity-100'}
+  class="flex h-full flex-col justify-between border-r border-[#1c1c25] bg-[#0d0d12] select-none transition-all duration-200 ease-in-out shrink-0
+    fixed inset-y-0 left-0 z-50 w-72 p-4 pb-[calc(1rem+var(--sab))] shadow-2xl lg:relative lg:z-auto lg:shadow-none
+    {platform.isMac && platform.isNativeTauri ? 'lg:pt-9' : ''}
+    {isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+    {isCollapsed ? 'lg:w-0 lg:p-0 lg:border-r-0 lg:overflow-hidden lg:opacity-0 lg:pointer-events-none' : 'lg:w-60 lg:p-3.5 lg:pb-[calc(0.875rem+var(--sab))] lg:opacity-100'}
   "
 >
   {#if platform.isMac && platform.isNativeTauri}
-    <div data-tauri-drag-region class="hidden md:block absolute top-0 left-0 right-0 h-8 z-10"></div>
+    <div data-tauri-drag-region class="hidden lg:block absolute top-0 left-0 right-0 h-8 z-10"></div>
   {/if}
   <!-- Brand Header -->
-  <div>
+  <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar">
     <div class="flex items-center justify-between px-1 py-2 mb-4">
       <div class="flex items-center gap-2.5 min-w-0">
         <div class="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shadow-inner shrink-0">
@@ -108,7 +108,7 @@
         <button
           type="button"
           onclick={onCloseMobile}
-          class="md:hidden text-neutral-500 hover:text-white p-1 rounded-lg hover:bg-[#1a1a24] transition shrink-0"
+          class="lg:hidden text-neutral-500 hover:text-white p-1.5 rounded-lg hover:bg-[#1a1a24] transition shrink-0"
           aria-label="Close mobile sidebar"
         >
           <PanelLeftClose class="h-4 w-4" />
@@ -117,7 +117,7 @@
         <button
           type="button"
           onclick={onToggleCollapse}
-          class="hidden md:block text-neutral-500 hover:text-white p-1 rounded-lg hover:bg-[#1a1a24] transition shrink-0"
+          class="hidden lg:block text-neutral-500 hover:text-white p-1.5 rounded-lg hover:bg-[#1a1a24] transition shrink-0"
           title="Hide Sidebar (⌘B)"
         >
           <PanelLeftClose class="h-4 w-4" />

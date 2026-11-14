@@ -15,28 +15,22 @@ type contextKey string
 const userIDKey contextKey = "user_id"
 
 type Router struct {
-	mux         *http.ServeMux
-	authService ports.AuthService
-	authHandler *AuthHandler
+	mux          *http.ServeMux
+	authService  ports.AuthService
+	authHandler  *AuthHandler
 	vaultHandler *VaultHandler
-	terminalWS  *TerminalWSHandler
-	sftpHandler *SFTPHandler
 }
 
 func NewRouter(
 	authService ports.AuthService,
 	authHandler *AuthHandler,
 	vaultHandler *VaultHandler,
-	terminalWS *TerminalWSHandler,
-	sftpHandler *SFTPHandler,
 ) *Router {
 	r := &Router{
-		mux:         http.NewServeMux(),
-		authService: authService,
-		authHandler: authHandler,
+		mux:          http.NewServeMux(),
+		authService:  authService,
+		authHandler:  authHandler,
 		vaultHandler: vaultHandler,
-		terminalWS:  terminalWS,
-		sftpHandler: sftpHandler,
 	}
 	r.registerRoutes()
 	return r
@@ -47,8 +41,11 @@ func (r *Router) registerRoutes() {
 	r.mux.HandleFunc("POST /api/v1/auth/register", r.authHandler.Register)
 	r.mux.HandleFunc("POST /api/v1/auth/login", r.authHandler.Login)
 
-	// Protected Profile
+	// Protected Profile & User Management (Gateway Admin Console)
 	r.mux.Handle("GET /api/v1/auth/me", r.authMiddleware(http.HandlerFunc(r.authHandler.Me)))
+	r.mux.Handle("GET /api/v1/users", r.authMiddleware(http.HandlerFunc(r.authHandler.ListUsers)))
+	r.mux.Handle("POST /api/v1/users", r.authMiddleware(http.HandlerFunc(r.authHandler.CreateUser)))
+	r.mux.Handle("DELETE /api/v1/users/{id}", r.authMiddleware(http.HandlerFunc(r.authHandler.DeleteUser)))
 
 	// Protected Vaults
 	r.mux.Handle("GET /api/v1/vaults", r.authMiddleware(http.HandlerFunc(r.vaultHandler.ListVaults)))
@@ -65,17 +62,6 @@ func (r *Router) registerRoutes() {
 	// Protected Vault Members
 	r.mux.Handle("GET /api/v1/vaults/{id}/members", r.authMiddleware(http.HandlerFunc(r.vaultHandler.ListMembers)))
 	r.mux.Handle("POST /api/v1/vaults/{id}/members", r.authMiddleware(http.HandlerFunc(r.vaultHandler.InviteMember)))
-
-	// SFTP File Manager Endpoints
-	r.mux.Handle("POST /api/v1/sftp/list", r.authMiddleware(http.HandlerFunc(r.sftpHandler.List)))
-	r.mux.Handle("POST /api/v1/sftp/mkdir", r.authMiddleware(http.HandlerFunc(r.sftpHandler.Mkdir)))
-	r.mux.Handle("POST /api/v1/sftp/delete", r.authMiddleware(http.HandlerFunc(r.sftpHandler.Delete)))
-	r.mux.Handle("POST /api/v1/sftp/download", r.authMiddleware(http.HandlerFunc(r.sftpHandler.Download)))
-	r.mux.Handle("POST /api/v1/sftp/upload", r.authMiddleware(http.HandlerFunc(r.sftpHandler.Upload)))
-
-	// WebSockets (Terminal & Multiplayer)
-	r.mux.Handle("/ws/terminal/{hostId}", r.wsAuthMiddleware(http.HandlerFunc(r.terminalWS.HandleTerminal)))
-	r.mux.Handle("/ws/sessions/{sessionId}/join", r.wsAuthMiddleware(http.HandlerFunc(r.terminalWS.JoinSession)))
 }
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -110,32 +96,6 @@ func (r *Router) authMiddleware(next http.Handler) http.Handler {
 		userID, err := r.authService.ValidateToken(req.Context(), tokenString)
 		if err != nil {
 			writeJSONError(w, http.StatusUnauthorized, "invalid or expired token")
-			return
-		}
-
-		ctx := context.WithValue(req.Context(), userIDKey, userID.String())
-		next.ServeHTTP(w, req.WithContext(ctx))
-	})
-}
-
-func (r *Router) wsAuthMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		tokenString := req.URL.Query().Get("token")
-		if tokenString == "" {
-			authHeader := req.Header.Get("Authorization")
-			if strings.HasPrefix(authHeader, "Bearer ") {
-				tokenString = strings.TrimPrefix(authHeader, "Bearer ")
-			}
-		}
-
-		if tokenString == "" {
-			writeJSONError(w, http.StatusUnauthorized, "websocket authorization token required")
-			return
-		}
-
-		userID, err := r.authService.ValidateToken(req.Context(), tokenString)
-		if err != nil {
-			writeJSONError(w, http.StatusUnauthorized, "invalid websocket token")
 			return
 		}
 

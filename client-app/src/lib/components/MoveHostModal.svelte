@@ -28,34 +28,42 @@
   let selectedFolder = $state('');
   let customFolder = $state('');
   let selectedVaultId = $state('');
+  let lastOpenedHostId = $state('');
 
   $effect(() => {
     if (isOpen && host) {
-      selectedFolder = host.group || 'Default';
-      customFolder = '';
       const otherVaults = vaults.filter((v) => v.id !== currentVault?.id);
-      selectedVaultId = otherVaults.length > 0 ? otherVaults[0].id : '';
+      if (host.id !== lastOpenedHostId) {
+        lastOpenedHostId = host.id;
+        selectedFolder = host.group || 'Default';
+        customFolder = '';
+        selectedVaultId = otherVaults.length > 0 ? otherVaults[0].id : '';
+      } else if (!selectedVaultId && otherVaults.length > 0) {
+        selectedVaultId = otherVaults[0].id;
+      }
+    } else if (!isOpen) {
+      lastOpenedHostId = '';
     }
   });
 
-  function handleFolderSubmit(e: SubmitEvent) {
+  async function handleFolderSubmit(e: SubmitEvent) {
     e.preventDefault();
     const target = customFolder.trim() || selectedFolder.trim() || 'Default';
-    onMoveToFolder(target);
+    await onMoveToFolder(target);
     onClose();
   }
 
-  function handleVaultSubmit(e: SubmitEvent) {
+  async function handleVaultSubmit(e: SubmitEvent) {
     e.preventDefault();
     if (!selectedVaultId) return;
-    onMoveToVault(selectedVaultId);
+    await onMoveToVault(selectedVaultId);
     onClose();
   }
 </script>
 
 {#if isOpen && host}
-  <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-0 sm:p-4 overflow-y-auto">
-    <div class="w-full max-w-md max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-2xl border border-[#28283a] bg-[#14141e] p-4 pb-[calc(1.25rem+var(--sab))] sm:p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150 sm:my-auto">
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 overflow-y-auto">
+    <div class="w-full max-w-md max-h-[85dvh] overflow-y-auto rounded-2xl border border-[#28283a] bg-[#14141e] p-4 sm:p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150 my-auto">
       <div class="flex items-start justify-between">
         <div class="flex items-center gap-3">
           <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">

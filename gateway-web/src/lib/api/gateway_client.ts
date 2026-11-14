@@ -122,8 +122,36 @@ class GatewayApiClient {
     return this.request<GatewayUser>('/auth/me');
   }
 
+  async getUsers(): Promise<GatewayUser[]> {
+    return this.request<GatewayUser[]>('/users');
+  }
+
+  async createUser(email: string, password: string, name: string): Promise<GatewayUser> {
+    return this.request<GatewayUser>('/users', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, name })
+    });
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    await this.request<{ status: string }>(`/users/${userId}`, {
+      method: 'DELETE'
+    });
+  }
+
   async getVaults(): Promise<GatewayVault[]> {
     return this.request<GatewayVault[]>('/vaults');
+  }
+
+  async createVault(name: string, type: 'personal' | 'team' = 'team'): Promise<GatewayVault> {
+    return this.request<GatewayVault>('/vaults', {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        type,
+        encrypted_key: `e2ee-wrapped-${type}-key-${Date.now()}`
+      })
+    });
   }
 
   async getVaultMembers(vaultId: string): Promise<GatewayMember[]> {

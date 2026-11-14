@@ -14,8 +14,10 @@
   import ImportModal from './lib/components/ImportModal.svelte';
   import TunnelsView from './lib/components/TunnelsView.svelte';
   import SftpView from './lib/components/SftpView.svelte';
+  import ToastContainer from './lib/components/ToastContainer.svelte';
   import { terminalStore } from './lib/stores/terminal.svelte';
   import { platform } from './lib/stores/platform.svelte';
+  import { toast, formatErrorMessage } from './lib/stores/toast.svelte';
   import { api, type ApiVault, type ApiVaultItem } from './lib/api/client';
   import {
     Plus,
@@ -82,14 +84,12 @@
 
   // Gateway & Standalone Connection State
   let gatewayApiUrl = $state(api.getApiBase());
-  let gatewayWsUrl = $state(api.getWsBase());
   let connectionChoice = $state<'select' | 'gateway' | 'standalone'>('select');
 
   // Auth State
   let isAuthenticated = $state(false);
   let authEmail = $state('admin@opentermius.local');
   let authPassword = $state('OpenTermius2026!');
-  let authName = $state('DevOps Admin');
   let authError = $state<string | null>(null);
   let isAuthLoading = $state(false);
 
@@ -188,7 +188,7 @@
         loadState = 'success';
       } else {
         loadState = 'error';
-        errorMessage = err instanceof Error ? err.message : 'Cannot connect to OpenTermius backend';
+        errorMessage = formatErrorMessage(err, 'Cannot connect to OpenTermius backend');
       }
     }
   }
@@ -251,25 +251,25 @@
       loadState = 'success';
     } catch (err: unknown) {
       loadState = 'error';
-      errorMessage = err instanceof Error ? err.message : 'Failed to fetch hosts from database';
+      errorMessage = formatErrorMessage(err, 'Failed to fetch hosts from database');
     }
   }
 
-  async function handleAuthSubmit(mode: 'login' | 'register') {
+  async function handleAuthSubmit() {
     isAuthLoading = true;
     authError = null;
 
     try {
-      api.setGateway(gatewayApiUrl.trim(), gatewayWsUrl.trim());
-      if (mode === 'register') {
-        await api.register(authEmail, authPassword, authName);
-      } else {
-        await api.login(authEmail, authPassword);
+      api.setGateway(gatewayApiUrl.trim());
+      await api.login(authEmail, authPassword);
+      const migrated = await api.syncStandaloneToGateway();
+      if (migrated > 0) {
+        toast.success(`Synced ${migrated} local item(s) to your Personal Vault.`);
       }
       isAuthenticated = true;
       await checkAuthAndLoadData();
     } catch (err: unknown) {
-      authError = err instanceof Error ? err.message : 'Gateway connection failed';
+      authError = formatErrorMessage(err, 'Gateway connection failed');
     } finally {
       isAuthLoading = false;
     }
@@ -315,8 +315,9 @@
 
       const ciphertext = btoa(JSON.stringify(payload));
       const nonce = btoa(crypto.randomUUID().slice(0, 12));
+      const isExistingHost = Boolean(editingHost || (hostData.id && hosts.some((h) => h.id === hostData.id)));
 
-      if (editingHost) {
+      if (isExistingHost) {
         // Update existing host item
         await api.updateVaultItem(activeVault.id, hostData.id, {
           label: hostData.label,
@@ -345,7 +346,7 @@
       }
       loadState = 'success';
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to save host to database');
+      toast.error(err, 'Failed to save host to database');
     }
   }
 
@@ -365,31 +366,40 @@
         loadState = 'empty';
       }
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to delete host');
+      toast.error(err, 'Failed to delete host');
     }
   }
 
   function handleOpenMoveModal(host: any) {
     movingHost = host;
     isMoveModalOpen = true;
+    api.getVaults().then((loaded) => {
+      if (loaded.length > 0) vaults = loaded;
+    }).catch(() => {});
   }
 
   async function handleMoveToFolder(newFolder: string) {
-    if (!movingHost) return;
-    const updated = { ...movingHost, group: newFolder };
+    const targetHost = movingHost;
+    if (!targetHost) return;
+    const updated = { ...targetHost, group: newFolder };
     await handleSaveHost(updated);
+    toast.success(`Moved "${targetHost.label}" to folder "${newFolder}".`);
   }
 
   async function handleMoveToVault(targetVaultId: string) {
-    if (!movingHost || !activeVault) return;
+    const targetHost = movingHost;
+    const sourceVault = activeVault;
+    if (!targetHost || !sourceVault) return;
     try {
-      await api.moveVaultItem(activeVault.id, movingHost.id, targetVaultId);
-      hosts = hosts.filter((h) => h.id !== movingHost.id);
+      await api.moveVaultItem(sourceVault.id, targetHost.id, targetVaultId);
+      hosts = hosts.filter((h) => h.id !== targetHost.id);
       if (hosts.length === 0) {
         loadState = 'empty';
       }
+      const targetVaultName = vaults.find((v) => v.id === targetVaultId)?.name || 'target vault';
+      toast.success(`Transferred "${targetHost.label}" to ${targetVaultName}.`);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to move host to vault');
+      toast.error(err, 'Failed to move host to vault');
     }
   }
 
@@ -435,20 +445,23 @@
     if (!activeVault) return;
     for (const h of importedList) {
       const payload = {
-        label: h.label,
         address: h.address,
         port: h.port || 22,
         username: h.username || 'root',
         group: h.group || 'Imported',
         tags: h.tags || ['imported'],
-        authType: h.authType || 'password'
+        authType: h.authType || 'password',
+        password: h.password || '',
+        privateKey: h.privateKey || '',
+        passphrase: h.passphrase || ''
       };
-      const encryptedData = btoa(JSON.stringify(payload));
+      const ciphertext = btoa(JSON.stringify(payload));
+      const nonce = btoa(crypto.randomUUID().slice(0, 12));
       await api.createVaultItem(activeVault.id, {
         kind: 'host',
-        name: h.label,
-        encrypted_data: encryptedData,
-        tags: h.tags || ['imported']
+        label: h.label,
+        ciphertext,
+        nonce
       });
     }
     await loadHosts();
@@ -459,12 +472,40 @@
     await loadHosts();
   }
 
+  async function silentBackgroundSync() {
+    if (!isAuthenticated || api.isStandalone() || isAddHostOpen || isMoveModalOpen) return;
+    try {
+      const latestVaults = await api.getVaults();
+      if (latestVaults.length > 0) {
+        vaults = latestVaults;
+        if (!activeVault || !latestVaults.some((v) => v.id === activeVault?.id)) {
+          activeVault = latestVaults[0];
+        }
+      }
+      await loadHosts();
+    } catch {
+      // Ignore background polling errors silently
+    }
+  }
+
   let hideMobileBottomNav = $derived(
     platform.isMobile && platform.isKeyboardOpen && activeNav === 'terminal'
   );
 
   onMount(() => {
     checkAuthAndLoadData();
+    const unsubSync = api.onSyncComplete((count) => {
+      toast.success(`Synced ${count} offline change(s) to Gateway.`);
+      void loadHosts();
+    });
+    const syncTimer = setInterval(silentBackgroundSync, 15000);
+    const onFocus = () => void silentBackgroundSync();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      unsubSync();
+      clearInterval(syncTimer);
+      window.removeEventListener('focus', onFocus);
+    };
   });
 </script>
 
@@ -573,7 +614,7 @@
           <button
             type="button"
             onclick={() => (isMobileMenuOpen = !isMobileMenuOpen)}
-            class="flex md:hidden items-center justify-center rounded-lg p-1.5 text-neutral-400 hover:text-white hover:bg-[#1a1a24] transition mr-0.5 shrink-0"
+            class="flex lg:hidden items-center justify-center rounded-lg p-1.5 text-neutral-400 hover:text-white hover:bg-[#1a1a24] transition mr-0.5 shrink-0"
             aria-label="Toggle navigation menu"
           >
             <Menu class="h-4 w-4 text-emerald-400" />
@@ -583,7 +624,7 @@
           <button
             type="button"
             onclick={() => (isSidebarCollapsed = !isSidebarCollapsed)}
-            class="hidden md:flex items-center justify-center rounded-lg p-1.5 text-neutral-400 hover:text-white hover:bg-[#1a1a24] transition mr-1 shrink-0"
+            class="hidden lg:flex items-center justify-center rounded-lg p-1.5 text-neutral-400 hover:text-white hover:bg-[#1a1a24] transition mr-1 shrink-0"
             title={isSidebarCollapsed ? "Show Sidebar (⌘B)" : "Hide Sidebar (⌘B)"}
           >
             {#if isSidebarCollapsed}
@@ -786,7 +827,7 @@
                   </div>
                   <div>
                     <h2 class="text-sm font-bold text-white">Connect to Sync Gateway</h2>
-                    <p class="text-[11px] text-neutral-400">Self-Hosted Go Backend & WebSocket Stream</p>
+                    <p class="text-[11px] text-neutral-400">Self-Hosted E2EE Vault Sync Server</p>
                   </div>
                 </div>
                 <button
@@ -807,26 +848,13 @@
               <div class="space-y-3.5">
                 <div>
                   <label for="gw-api-url" class="block font-medium text-neutral-300 mb-1">
-                    API URL
+                    Gateway API URL
                   </label>
                   <input
                     id="gw-api-url"
                     type="text"
                     bind:value={gatewayApiUrl}
                     placeholder="http://192.168.1.50:8080/api/v1"
-                    class="w-full rounded-lg border border-[#262635] bg-[#0c0c12] px-3 py-2 text-white font-mono text-[11px] outline-none focus:border-emerald-500"
-                  />
-                </div>
-
-                <div>
-                  <label for="gw-ws-url" class="block font-medium text-neutral-300 mb-1">
-                    WebSocket URL
-                  </label>
-                  <input
-                    id="gw-ws-url"
-                    type="text"
-                    bind:value={gatewayWsUrl}
-                    placeholder="ws://192.168.1.50:8080/ws"
                     class="w-full rounded-lg border border-[#262635] bg-[#0c0c12] px-3 py-2 text-white font-mono text-[11px] outline-none focus:border-emerald-500"
                   />
                 </div>
@@ -854,6 +882,10 @@
                   </div>
                 </div>
 
+                <p class="text-[11px] text-neutral-400">
+                  Need an account? Register through your Gateway Console.
+                </p>
+
                 <div class="pt-3 flex items-center justify-between gap-2 border-t border-[#1e1e2a]">
                   <button
                     type="button"
@@ -862,24 +894,14 @@
                   >
                     Cancel
                   </button>
-                  <div class="flex gap-2 flex-1 justify-end">
-                    <button
-                      type="button"
-                      onclick={() => handleAuthSubmit('register')}
-                      disabled={isAuthLoading}
-                      class="rounded-lg bg-[#20202d] px-3 py-2 font-semibold text-neutral-200 hover:bg-[#28283a] transition disabled:opacity-50"
-                    >
-                      Sign Up
-                    </button>
-                    <button
-                      type="button"
-                      onclick={() => handleAuthSubmit('login')}
-                      disabled={isAuthLoading}
-                      class="rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-500 transition shadow disabled:opacity-50"
-                    >
-                      {isAuthLoading ? 'Connecting...' : 'Connect Gateway'}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onclick={handleAuthSubmit}
+                    disabled={isAuthLoading}
+                    class="rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-500 transition shadow disabled:opacity-50"
+                  >
+                    {isAuthLoading ? 'Connecting...' : 'Connect Gateway'}
+                  </button>
                 </div>
               </div>
             </div>
@@ -1111,9 +1133,25 @@
       {:else if activeNav === 'identities'}
         <IdentitiesView activeVaultId={activeVault?.id} />
       {:else if activeNav === 'vaults'}
-        <VaultsView {activeVault} onSelectVault={handleSelectVault} />
+        <VaultsView
+          {activeVault}
+          onSelectVault={handleSelectVault}
+          onVaultsUpdated={(updated) => (vaults = updated)}
+        />
       {:else if activeNav === 'snippets'}
-        <SnippetsView activeVaultId={activeVault?.id} />
+        <SnippetsView
+          activeVaultId={activeVault?.id}
+          onRunSnippet={(script) => {
+            if (terminalStore.tabCount === 0) {
+              handleNewLocalTab();
+            } else {
+              activeNav = 'terminal';
+            }
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('opentermius:run-snippet', { detail: { script } }));
+            }, 120);
+          }}
+        />
       {:else if activeNav === 'logs'}
         <SessionLogsView />
       {:else if activeNav === 'more'}
@@ -1200,27 +1238,17 @@
             </div>
 
             <div>
-              <label for="cfg-backend-url" class="block font-medium text-neutral-300 mb-1">Self-Hosted Backend URL</label>
+              <label for="cfg-backend-url" class="block font-medium text-neutral-300 mb-1">Self-Hosted Gateway URL</label>
               <input
                 id="cfg-backend-url"
                 type="text"
                 bind:value={gatewayApiUrl}
-                onchange={() => api.setGateway(gatewayApiUrl, gatewayWsUrl)}
-                class="w-full rounded-lg border border-[#252535] bg-[#0d0d12] px-3 py-2 font-mono text-neutral-200 outline-none focus:border-emerald-500"
-              />
-            </div>
-            <div>
-              <label for="cfg-ws-url" class="block font-medium text-neutral-300 mb-1">WebSocket Gateway</label>
-              <input
-                id="cfg-ws-url"
-                type="text"
-                bind:value={gatewayWsUrl}
-                onchange={() => api.setGateway(gatewayApiUrl, gatewayWsUrl)}
+                onchange={() => api.setGateway(gatewayApiUrl)}
                 class="w-full rounded-lg border border-[#252535] bg-[#0d0d12] px-3 py-2 font-mono text-neutral-200 outline-none focus:border-emerald-500"
               />
             </div>
             <div class="pt-2 border-t border-[#20202c] flex items-center justify-between">
-              <span class="text-neutral-400 font-mono text-[11px]">OpenTermius v0.1.2</span>
+              <span class="text-neutral-400 font-mono text-[11px]">OpenTermius v0.1.3</span>
               <button
                 type="button"
                 onclick={handleSignOut}
@@ -1440,4 +1468,6 @@
     onMoveToFolder={handleMoveToFolder}
     onMoveToVault={handleMoveToVault}
   />
+
+  <ToastContainer />
 </div>

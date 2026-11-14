@@ -13,7 +13,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	httpAdapter "github.com/opentermius/opentermius/internal/adapters/handler/http"
 	"github.com/opentermius/opentermius/internal/adapters/repository/postgres"
-	sshAdapter "github.com/opentermius/opentermius/internal/adapters/ssh"
 	"github.com/opentermius/opentermius/internal/usecase"
 )
 
@@ -57,18 +56,23 @@ func main() {
 	// 3. Initialize UseCases (Application Business Rules)
 	authUC := usecase.NewAuthUseCase(userRepo, jwtSecret, 72*time.Hour)
 	vaultUC := usecase.NewVaultUseCase(vaultRepo, userRepo)
-	terminalUC := usecase.NewTerminalUseCase(nil)
 
-	// 4. Initialize Handlers & SSH / SFTP Adapters
-	sshService := sshAdapter.NewSSHService()
-	sftpService := sshAdapter.NewSFTPService()
+	// 3b. Ensure Default Gateway Admin Account Exists
+	if pool != nil {
+		adminEmail := getEnv("DEFAULT_ADMIN_EMAIL", "admin@opentermius.local")
+		adminPass := getEnv("DEFAULT_ADMIN_PASSWORD", "OpenTermius2026!")
+		adminName := getEnv("DEFAULT_ADMIN_NAME", "Gateway Admin")
+		if _, _, err := authUC.Register(ctx, adminEmail, adminPass, adminName); err == nil {
+			log.Printf("Seeded default Gateway Admin user: %s", adminEmail)
+		}
+	}
+
+	// 4. Initialize Handlers
 	authHandler := httpAdapter.NewAuthHandler(authUC)
 	vaultHandler := httpAdapter.NewVaultHandler(vaultUC)
-	terminalWSHandler := httpAdapter.NewTerminalWSHandler(terminalUC, sshService)
-	sftpHandler := httpAdapter.NewSFTPHandler(sftpService)
 
 	// 5. Initialize Router
-	router := httpAdapter.NewRouter(authUC, authHandler, vaultHandler, terminalWSHandler, sftpHandler)
+	router := httpAdapter.NewRouter(authUC, authHandler, vaultHandler)
 
 	server := &http.Server{
 		Addr:         ":" + port,
@@ -79,7 +83,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("OpenTermius HTTP & WebSocket server listening on :%s", port)
+		log.Printf("OpenTermius Gateway HTTP server listening on :%s", port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("HTTP server failure: %v", err)
 		}

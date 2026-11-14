@@ -32,6 +32,10 @@
     padding-right: var(--sar);
   }
 
+  #app {
+    height: 100%;
+  }
+
   button, a, [role="button"] {
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;

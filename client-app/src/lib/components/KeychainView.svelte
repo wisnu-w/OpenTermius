@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, type ApiVaultItem } from '../api/client';
+  import { toast, formatErrorMessage } from '../stores/toast.svelte';
   import {
     Key,
     Plus,
@@ -109,7 +110,7 @@
       state = 'success';
     } catch (err: unknown) {
       state = 'error';
-      errorMessage = err instanceof Error ? err.message : 'Failed to load keychain from vault';
+      errorMessage = formatErrorMessage(err, 'Failed to load keychain from vault');
     }
   }
 
@@ -194,7 +195,7 @@
       newPublicKey = '';
       newPassphrase = '';
     } catch (err: unknown) {
-      formError = err instanceof Error ? err.message : 'Failed to save key to vault';
+      formError = formatErrorMessage(err, 'Failed to save key to vault');
     } finally {
       isSaving = false;
     }
@@ -210,7 +211,7 @@
       keys = keys.filter((k) => k.id !== keyId);
       if (keys.length === 0) state = 'empty';
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to delete key');
+      toast.error(err, 'Failed to delete key');
     }
   }
 
@@ -234,26 +235,26 @@
   });
 </script>
 
-<div class="h-full overflow-y-auto p-6 space-y-6">
+<div class="h-full overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
   <!-- Header -->
-  <div class="flex items-center justify-between">
-    <div>
-      <div class="flex items-center gap-2">
-        <h2 class="text-lg font-bold text-white">Keychain & SSH Keys</h2>
-        <span class="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-xs text-emerald-400 font-medium">
-          Zero-Knowledge Vault
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#22222a] pb-4">
+    <div class="min-w-0">
+      <div class="flex items-center gap-2 flex-wrap">
+        <h2 class="text-base font-bold text-white tracking-tight">Keychain</h2>
+        <span class="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
+          E2EE Keys
         </span>
       </div>
       <p class="text-xs text-neutral-400 mt-1">
-        Store and manage reusable SSH keys with client-side E2EE encryption. Copy public keys directly to your servers.
+        Store reusable SSH keys and copy public keys to your servers.
       </p>
     </div>
 
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2 shrink-0">
       <button
         type="button"
         onclick={loadKeys}
-        class="flex items-center gap-1.5 rounded-lg border border-[#22222a] bg-[#14141a] px-3 py-1.5 text-xs text-neutral-300 hover:text-white transition cursor-pointer"
+        class="flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-lg border border-[#22222a] bg-[#14141d] px-3 py-2 sm:py-1.5 text-xs text-neutral-300 hover:text-white transition cursor-pointer"
       >
         <RefreshCw class="h-3.5 w-3.5" /> Refresh
       </button>
@@ -261,9 +262,9 @@
       <button
         type="button"
         onclick={openAddModal}
-        class="flex items-center gap-2 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow hover:bg-emerald-500 transition cursor-pointer active:scale-95"
+        class="flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 sm:py-1.5 text-xs font-semibold text-white shadow hover:bg-emerald-500 transition cursor-pointer active:scale-95"
       >
-        <Plus class="h-4 w-4" /> Add SSH Key
+        <Plus class="h-4 w-4" /> Add Key
       </button>
     </div>
   </div>

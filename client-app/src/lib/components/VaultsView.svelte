@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, type ApiVault, type ApiVaultMember } from '../api/client';
+  import { toast, formatErrorMessage } from '../stores/toast.svelte';
   import {
     FolderLock,
     ShieldCheck,
@@ -18,9 +19,10 @@
   interface Props {
     activeVault?: ApiVault | null;
     onSelectVault?: (vault: ApiVault) => void;
+    onVaultsUpdated?: (vaults: ApiVault[]) => void;
   }
 
-  let { activeVault, onSelectVault }: Props = $props();
+  let { activeVault, onSelectVault, onVaultsUpdated }: Props = $props();
 
   // 4 UI States
   let state = $state<'loading' | 'success' | 'empty' | 'error'>('loading');
@@ -43,10 +45,11 @@
     errorMessage = null;
     try {
       vaults = await api.getVaults();
+      onVaultsUpdated?.(vaults);
       state = vaults.length === 0 ? 'empty' : 'success';
     } catch (err: unknown) {
       state = 'error';
-      errorMessage = err instanceof Error ? err.message : 'Failed to fetch vaults from backend';
+      errorMessage = formatErrorMessage(err, 'Failed to fetch vaults from backend');
     }
   }
 
@@ -61,12 +64,13 @@
         'wrapped-team-vault-key-aes-256'
       );
       vaults.push(created);
+      onVaultsUpdated?.([...vaults]);
       state = 'success';
       newVaultName = '';
       isCreating = false;
       onSelectVault?.(created);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to create team vault');
+      toast.error(err, 'Failed to create team vault');
     }
   }
 
@@ -78,7 +82,7 @@
     try {
       vaultMembers = await api.getVaultMembers(vault.id);
     } catch (err: unknown) {
-      inviteError = err instanceof Error ? err.message : 'Failed to load vault members';
+      inviteError = formatErrorMessage(err, 'Failed to load vault members');
     } finally {
       isMembersLoading = false;
     }
@@ -100,7 +104,7 @@
       inviteSuccess = `Successfully invited ${inviteEmail.trim()} as ${inviteRole}!`;
       inviteEmail = '';
     } catch (err: unknown) {
-      inviteError = err instanceof Error ? err.message : 'Failed to invite user to vault';
+      inviteError = formatErrorMessage(err, 'Failed to invite user to vault');
     }
   }
 
@@ -109,60 +113,64 @@
   });
 </script>
 
-<div class="h-full overflow-y-auto p-6 space-y-6">
+<div class="h-full overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
   <!-- Header -->
-  <div class="flex items-center justify-between">
-    <div>
-      <div class="flex items-center gap-2">
-        <h2 class="text-lg font-bold text-white">Encrypted Vaults & Teams</h2>
-        <span class="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-xs text-emerald-400 font-medium">
-          Zero-Knowledge E2EE
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#22222a] pb-4">
+    <div class="min-w-0">
+      <div class="flex items-center gap-2 flex-wrap">
+        <h2 class="text-base font-bold text-white tracking-tight">Vaults & Teams</h2>
+        <span class="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
+          E2EE
         </span>
       </div>
       <p class="text-xs text-neutral-400 mt-1">
-        Personal vaults isolate credentials strictly for you. Team vaults allow team collaboration via role-based access.
+        Separate personal credentials or share hosts and keys across team vaults.
       </p>
     </div>
 
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2 shrink-0">
       <button
+        type="button"
         onclick={loadVaults}
-        class="flex items-center gap-1.5 rounded-lg border border-[#22222a] bg-[#14141a] px-3 py-1.5 text-xs text-neutral-300 hover:text-white transition"
+        class="flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-lg border border-[#22222a] bg-[#14141d] px-3 py-2 sm:py-1.5 text-xs text-neutral-300 hover:text-white transition"
       >
         <RefreshCw class="h-3.5 w-3.5" /> Refresh
       </button>
 
       <button
+        type="button"
         onclick={() => (isCreating = !isCreating)}
-        class="flex items-center gap-2 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow hover:bg-emerald-500 transition"
+        class="flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 sm:py-1.5 text-xs font-semibold text-white shadow hover:bg-emerald-500 transition"
       >
-        <Plus class="h-4 w-4" /> Create Team Vault
+        <Plus class="h-4 w-4" /> New Vault
       </button>
     </div>
   </div>
 
   {#if isCreating}
-    <form onsubmit={handleCreateTeamVault} class="rounded-xl border border-emerald-500/30 bg-[#14141d] p-4 flex items-center gap-3 animate-in fade-in">
+    <form onsubmit={handleCreateTeamVault} class="rounded-xl border border-emerald-500/30 bg-[#14141d] p-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 animate-in fade-in">
       <input
         type="text"
         bind:value={newVaultName}
-        placeholder="Enter Team Vault Name (e.g. Infrastructure & DevOps Team)"
-        class="flex-1 rounded-lg border border-[#262635] bg-[#0c0c12] px-3 py-1.5 text-xs text-white placeholder-neutral-500 outline-none focus:border-emerald-500"
+        placeholder="Vault name (e.g. Infrastructure Team)"
+        class="flex-1 rounded-xl sm:rounded-lg border border-[#262635] bg-[#0c0c12] px-3 py-2.5 sm:py-1.5 text-sm sm:text-xs text-white placeholder-neutral-500 outline-none focus:border-emerald-500"
         required
       />
-      <button
-        type="submit"
-        class="rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
-      >
-        Save Team Vault
-      </button>
-      <button
-        type="button"
-        onclick={() => (isCreating = false)}
-        class="rounded-lg bg-[#20202c] px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
-      >
-        Cancel
-      </button>
+      <div class="grid grid-cols-2 sm:flex gap-2">
+        <button
+          type="button"
+          onclick={() => (isCreating = false)}
+          class="rounded-xl sm:rounded-lg bg-[#20202c] px-3 py-2.5 sm:py-1.5 text-xs text-neutral-400 hover:text-white"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          class="rounded-xl sm:rounded-lg bg-emerald-600 px-4 py-2.5 sm:py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
+        >
+          Save Vault
+        </button>
+      </div>
     </form>
   {/if}
 
@@ -277,47 +285,49 @@
 
 <!-- Team Members & Invitation Modal -->
 {#if selectedVaultForMembers}
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-    <div class="w-full max-w-lg rounded-2xl border border-[#28283a] bg-[#14141e] p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 overflow-y-auto">
+    <div class="w-full max-w-lg max-h-[85dvh] overflow-y-auto rounded-2xl border border-[#28283a] bg-[#14141e] p-4 sm:p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150 my-auto">
       <div class="flex items-start justify-between">
         <div class="flex items-center gap-3">
           <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
             <Users class="h-5 w-5" />
           </div>
           <div>
-            <h3 class="text-base font-bold text-white">Manage Team Members</h3>
+            <h3 class="text-base font-bold text-white">Team Members</h3>
             <p class="text-xs text-neutral-400">Vault: <span class="text-neutral-200 font-semibold">{selectedVaultForMembers.name}</span></p>
           </div>
         </div>
-        <button onclick={() => (selectedVaultForMembers = null)} class="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-[#20202c]">
+        <button onclick={() => (selectedVaultForMembers = null)} class="text-neutral-400 hover:text-white p-1.5 rounded-lg hover:bg-[#20202c]">
           <X class="h-4 w-4" />
         </button>
       </div>
 
       <!-- Invite Member Form -->
-      <form onsubmit={handleInviteMember} class="space-y-3 rounded-xl border border-[#222230] bg-[#0d0d14] p-4 text-xs">
+      <form onsubmit={handleInviteMember} class="space-y-3 rounded-xl border border-[#222230] bg-[#0d0d14] p-3.5 text-xs">
         <span class="block font-semibold text-neutral-200">Invite Teammate</span>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <input
             type="email"
             bind:value={inviteEmail}
             placeholder="teammate@company.com"
-            class="flex-1 rounded-lg border border-[#28283c] bg-[#12121c] px-3 py-2 text-white placeholder-neutral-500 outline-none focus:border-indigo-500"
+            class="flex-1 rounded-xl sm:rounded-lg border border-[#28283c] bg-[#12121c] px-3 py-2.5 sm:py-2 text-sm sm:text-xs text-white placeholder-neutral-500 outline-none focus:border-indigo-500"
             required
           />
-          <select
-            bind:value={inviteRole}
-            class="rounded-lg border border-[#28283c] bg-[#12121c] px-3 py-2 text-white outline-none focus:border-indigo-500"
-          >
-            <option value="member">Member</option>
-            <option value="admin">Admin</option>
-          </select>
-          <button
-            type="submit"
-            class="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white shadow hover:bg-indigo-500 transition"
-          >
-            Invite
-          </button>
+          <div class="flex gap-2">
+            <select
+              bind:value={inviteRole}
+              class="flex-1 sm:flex-none rounded-xl sm:rounded-lg border border-[#28283c] bg-[#12121c] px-3 py-2.5 sm:py-2 text-sm sm:text-xs text-white outline-none focus:border-indigo-500"
+            >
+              <option value="member">Member</option>
+              <option value="admin">Admin</option>
+            </select>
+            <button
+              type="submit"
+              class="flex-1 sm:flex-none rounded-xl sm:rounded-lg bg-indigo-600 px-4 py-2.5 sm:py-2 font-semibold text-white shadow hover:bg-indigo-500 transition"
+            >
+              Invite
+            </button>
+          </div>
         </div>
 
         {#if inviteError}

@@ -109,6 +109,14 @@ func (a *AuthUseCase) GetProfile(ctx context.Context, userID uuid.UUID) (*domain
 	return a.userRepo.GetByID(ctx, userID)
 }
 
+func (a *AuthUseCase) ListUsers(ctx context.Context) ([]domain.User, error) {
+	return a.userRepo.ListAll(ctx)
+}
+
+func (a *AuthUseCase) DeleteUser(ctx context.Context, userID uuid.UUID) error {
+	return a.userRepo.Delete(ctx, userID)
+}
+
 func (a *AuthUseCase) generateToken(userID uuid.UUID) (string, error) {
 	claims := jwt.MapClaims{
 		"sub": userID.String(),

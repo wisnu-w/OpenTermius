@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api, type ApiSftpFile, type SftpHostConfig } from '../api/client';
   import { platform } from '../stores/platform.svelte';
+  import { toast, formatErrorMessage } from '../stores/toast.svelte';
   import {
     Folder,
     FolderPlus,
@@ -122,7 +123,7 @@
       loadState = items.length === 0 ? 'empty' : 'success';
     } catch (err: unknown) {
       loadState = 'error';
-      errorMessage = err instanceof Error ? err.message : 'Failed to list directory';
+      errorMessage = formatErrorMessage(err, 'Failed to list directory');
     }
   }
 
@@ -175,7 +176,7 @@
     try {
       await api.sftpDownload(config, item.path, item.name);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Download failed');
+      toast.error(err, 'Download failed');
     }
   }
 
@@ -194,7 +195,7 @@
       }
       await loadDirectory(currentPath);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Delete failed');
+      toast.error(err, 'Delete failed');
     }
   }
 
@@ -217,7 +218,7 @@
       newFolderName = '';
       await loadDirectory(currentPath);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to create folder');
+      toast.error(err, 'Failed to create folder');
     }
   }
 
@@ -242,7 +243,7 @@
       }
       await loadDirectory(currentPath);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Upload failed');
+      toast.error(err, 'Upload failed');
     } finally {
       isUploading = false;
       input.value = '';
