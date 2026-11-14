@@ -34,3 +34,24 @@ Before adding ANY new function, endpoint, route, or UI component:
 - **Zero-Knowledge Encryption:** Vault secrets (private keys, passwords, connection configs) are encrypted on client-side before transmission. The server never holds vault master keys.
 - **Defensive Safeguards:** Strict input validation, parameterized SQL queries (no string concatenation), rate limiting on authentication and terminal connection initiation.
 - **Keep `docs/security.md` updated:** Maintain documented threat models, trust boundaries, and cipher configurations.
+
+## 6. Release & Packaging Workflow (APK + DMG + GitHub Release)
+When releasing new client-app changes, ALWAYS bump the version and publish a new GitHub Release:
+1. **Bump Version (`X.Y.Z`)** in:
+   - `client-app/package.json`
+   - `client-app/src-tauri/tauri.conf.json`
+   - `client-app/src-tauri/Cargo.toml`
+   - `client-app/scripts/build-dmg.sh` (`DMG_NAME`)
+   - `client-app/src/App.svelte` (Settings version label)
+2. **Build Artifacts:**
+   - Android universal release APK: `cd client-app && ./scripts/build-apk.sh release`
+   - macOS `aarch64` DMG: `cd client-app && ./scripts/build-dmg.sh`
+3. **Tag & Publish Release:**
+   - Commit & push to `main`: `git commit -m "chore(release): bump version to X.Y.Z" && git tag vX.Y.Z && git push origin main vX.Y.Z`
+   - Create GitHub Release with both assets:
+     ```bash
+     gh release create vX.Y.Z \
+       "client-app/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk#OpenTermius_X.Y.Z_android_universal.apk" \
+       "client-app/src-tauri/target/release/bundle/dmg/OpenTermius_X.Y.Z_aarch64.dmg#OpenTermius_X.Y.Z_macOS_aarch64.dmg" \
+       --title "OpenTermius vX.Y.Z"
+     ```
