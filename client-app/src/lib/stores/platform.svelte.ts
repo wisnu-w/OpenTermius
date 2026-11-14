@@ -5,6 +5,9 @@ export type LayoutMode = 'mobile' | 'tablet' | 'desktop';
 class PlatformStore {
   width = $state<number>(typeof window !== 'undefined' ? window.innerWidth : 1280);
   height = $state<number>(typeof window !== 'undefined' ? window.innerHeight : 800);
+  visualHeight = $state<number>(
+    typeof window !== 'undefined' ? (window.visualViewport?.height ?? window.innerHeight) : 800
+  );
   userAgent = $state<string>(typeof navigator !== 'undefined' ? navigator.userAgent : '');
   isTouch = $state<boolean>(
     typeof window !== 'undefined' &&
@@ -30,17 +33,25 @@ class PlatformStore {
   isTablet = $derived(this.layoutMode === 'tablet');
   isDesktop = $derived(this.layoutMode === 'desktop');
   isHandheld = $derived(this.layoutMode === 'mobile' || this.layoutMode === 'tablet');
+  isKeyboardOpen = $derived(
+    this.isHandheld && this.height > 0 && this.visualHeight < this.height * 0.78
+  );
 
   constructor() {
     if (typeof window !== 'undefined') {
       const update = () => {
         this.width = window.innerWidth;
         this.height = window.innerHeight;
+        this.visualHeight = window.visualViewport?.height ?? window.innerHeight;
         this.userAgent = navigator.userAgent;
         this.isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
       };
+      const updateViewport = () => {
+        this.visualHeight = window.visualViewport?.height ?? window.innerHeight;
+      };
       window.addEventListener('resize', update);
       window.addEventListener('orientationchange', () => setTimeout(update, 100));
+      window.visualViewport?.addEventListener('resize', updateViewport);
     }
   }
 }

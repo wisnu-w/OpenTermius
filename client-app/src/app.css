@@ -26,8 +26,8 @@
   }
 
   body {
+    height: 100dvh;
     padding-top: var(--sat);
-    padding-bottom: var(--sab);
     padding-left: var(--sal);
     padding-right: var(--sar);
   }

@@ -64,6 +64,7 @@
   let connectionState = $state<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
   let errorMessage = $state<string | null>(null);
   let showAccessoryBar = $state(true);
+  let btnTouch = $derived(platform.isHandheld ? 'h-9 w-9 justify-center' : 'px-2 py-1');
 
   function sendTerminalInput(data: string) {
     if (isNativeApp) {
@@ -359,34 +360,38 @@
 
       <button
         onclick={() => (showAccessoryBar = !showAccessoryBar)}
-        class="flex items-center gap-1 rounded px-2 py-1 text-xs transition {showAccessoryBar ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-[#181822] text-neutral-400 hover:text-white'}"
+        class="flex items-center gap-1 rounded {btnTouch} text-xs transition {showAccessoryBar ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-[#181822] text-neutral-400 hover:text-white'}"
         title="Toggle virtual touch keys"
+        aria-label="Toggle virtual touch keys"
       >
-        <Keyboard class="h-3 w-3" />
+        <Keyboard class="h-3.5 w-3.5" />
       </button>
 
       <button
         onclick={handleReconnect}
-        class="flex items-center gap-1 rounded bg-[#181822] px-2 py-1 text-xs text-neutral-300 hover:text-white transition"
+        class="flex items-center gap-1 rounded bg-[#181822] {btnTouch} text-xs text-neutral-300 hover:text-white transition"
         title="Reconnect"
+        aria-label="Reconnect"
       >
-        <RefreshCw class="h-3 w-3" />
+        <RefreshCw class="h-3.5 w-3.5" />
       </button>
 
       <button
         onclick={handleClear}
-        class="flex items-center gap-1 rounded bg-[#181822] px-2 py-1 text-xs text-neutral-300 hover:text-white transition"
+        class="flex items-center gap-1 rounded bg-[#181822] {btnTouch} text-xs text-neutral-300 hover:text-white transition"
         title="Clear terminal"
+        aria-label="Clear terminal"
       >
-        <Trash2 class="h-3 w-3" />
+        <Trash2 class="h-3.5 w-3.5" />
       </button>
 
       <button
         onclick={onShareMultiplayer}
-        class="flex items-center gap-1 rounded bg-emerald-600/20 border border-emerald-500/30 px-2 py-1 text-xs font-semibold text-emerald-400 hover:bg-emerald-600/30 transition"
+        class="flex items-center gap-1 rounded bg-emerald-600/20 border border-emerald-500/30 {btnTouch} text-xs font-semibold text-emerald-400 hover:bg-emerald-600/30 transition"
         title="Share session via multiplayer link"
+        aria-label="Share session via multiplayer link"
       >
-        <Share2 class="h-3 w-3" />
+        <Share2 class="h-3.5 w-3.5" />
       </button>
 
       {#if isSplitPane && onClosePane}

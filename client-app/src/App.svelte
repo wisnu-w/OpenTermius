@@ -459,6 +459,10 @@
     await loadHosts();
   }
 
+  let hideMobileBottomNav = $derived(
+    platform.isMobile && platform.isKeyboardOpen && activeNav === 'terminal'
+  );
+
   onMount(() => {
     checkAuthAndLoadData();
   });
@@ -466,7 +470,7 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="flex h-screen w-screen overflow-hidden bg-[#0a0a0c] text-neutral-100 font-sans select-none">
+<div class="flex h-full w-screen overflow-hidden bg-[#0a0a0c] text-neutral-100 font-sans select-none">
   <!-- Left Navigation Sidebar (Desktop & Tablet only; Mobile uses native Bottom Nav + More screen) -->
   {#if !platform.isMobile}
     <Sidebar
@@ -483,7 +487,7 @@
   {/if}
 
   <!-- Main Viewport Area -->
-  <main class="flex flex-1 flex-col overflow-hidden {platform.isMobile ? 'pb-16' : 'pb-0'}">
+  <main class="flex flex-1 flex-col overflow-hidden {platform.isMobile && !hideMobileBottomNav ? 'pb-[calc(4rem+var(--sab))]' : 'pb-0'}">
     <!-- Top Header & Tabs Bar -->
     {#if platform.isMobile}
       {@const navTitles: Record<string, string> = {
@@ -554,7 +558,7 @@
             title="Open new terminal shell"
             aria-label="Open new terminal shell"
           >
-            <Plus class="h-5 w-5" />
+            <Terminal class="h-4.5 w-4.5" />
           </button>
         </div>
       </header>
@@ -1216,7 +1220,7 @@
               />
             </div>
             <div class="pt-2 border-t border-[#20202c] flex items-center justify-between">
-              <span class="text-neutral-400 font-mono text-[11px]">OpenTermius v0.1.1</span>
+              <span class="text-neutral-400 font-mono text-[11px]">OpenTermius v0.1.2</span>
               <button
                 type="button"
                 onclick={handleSignOut}
@@ -1240,7 +1244,7 @@
         editingHost = null;
         isAddHostOpen = true;
       }}
-      class="fixed bottom-20 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500 text-black shadow-lg shadow-emerald-500/25 active:scale-95 transition"
+      class="fixed bottom-[calc(5rem+var(--sab))] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500 text-black shadow-lg shadow-emerald-500/25 active:scale-95 transition"
       aria-label="Add new host"
     >
       <Plus class="h-6 w-6 stroke-[2.5]" />
@@ -1255,7 +1259,7 @@
       role="presentation"
     >
       <div
-        class="rounded-t-3xl border-t border-[#262635] bg-[#12121a] px-4 pt-3 pb-8 space-y-3 shadow-2xl"
+        class="rounded-t-3xl border-t border-[#262635] bg-[#12121a] px-4 pt-3 pb-[calc(1.5rem+var(--sab))] space-y-3 shadow-2xl"
         onclick={(e) => e.stopPropagation()}
         onkeydown={(e) => {
           if (e.key === 'Escape') isSessionSwitcherOpen = false;
@@ -1335,9 +1339,9 @@
   {/if}
 
   <!-- Mobile Bottom Navigation Bar (Material 3 style) -->
-  {#if isAuthenticated && platform.isMobile}
+  {#if isAuthenticated && platform.isMobile && !hideMobileBottomNav}
     {@const isMoreActive = ['more', 'vaults', 'keychain', 'identities', 'snippets', 'logs', 'settings'].includes(activeNav)}
-    <nav class="fixed bottom-0 left-0 right-0 h-16 bg-[#0e0e14]/95 backdrop-blur-md border-t border-[#1f1f2a] flex items-center justify-around z-30 px-1 select-none">
+    <nav class="fixed bottom-0 left-0 right-0 h-[calc(4rem+var(--sab))] pb-[var(--sab)] bg-[#0e0e14]/95 backdrop-blur-md border-t border-[#1f1f2a] flex items-center justify-around z-30 px-1 select-none">
       <button
         type="button"
         onclick={() => (activeNav = 'hosts')}

@@ -5,7 +5,7 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="$DIR/src-tauri/target/release/bundle/macos"
 DMG_DIR="$DIR/src-tauri/target/release/bundle/dmg"
 APP_NAME="opentermius.app"
-DMG_NAME="OpenTermius_0.1.1_aarch64.dmg"
+DMG_NAME="OpenTermius_0.1.2_aarch64.dmg"
 STAGING_DIR="/tmp/opentermius-dmg-staging"
 RW_DMG="/tmp/opentermius-rw.dmg"
 

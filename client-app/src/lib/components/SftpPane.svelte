@@ -392,7 +392,65 @@
         Empty directory
       </div>
     {:else}
-      <table class="w-full text-left border-collapse">
+      <!-- Mobile Touch File List -->
+      <div class="divide-y divide-[#171720] md:hidden">
+        {#each filteredItems as item (item.path)}
+          {@const Icon = getFileIcon(item)}
+          {@const isSelected = selectedPaths.includes(item.path)}
+          <div class="flex items-center gap-2.5 px-3 py-2.5 transition {isSelected ? 'bg-emerald-500/10' : 'active:bg-[#15151e]'}">
+            {#if !item.isDir}
+              <button
+                type="button"
+                onclick={() => toggleSelect(item)}
+                class="flex h-5 w-5 shrink-0 items-center justify-center rounded border transition {isSelected ? 'border-emerald-500 bg-emerald-500 text-black' : 'border-[#323244] bg-[#0c0c11] text-transparent'}"
+                aria-label="Select file"
+              >
+                <Check class="h-3.5 w-3.5" />
+              </button>
+            {:else}
+              <div class="w-5 shrink-0"></div>
+            {/if}
+
+            <button
+              type="button"
+              onclick={() => (item.isDir ? loadDirectory(item.path) : toggleSelect(item))}
+              class="flex flex-1 items-center gap-2.5 min-w-0 text-left py-0.5"
+            >
+              <Icon class="h-4.5 w-4.5 shrink-0 {item.isDir ? 'text-amber-400' : 'text-neutral-400'}" />
+              <div class="min-w-0 flex-1">
+                <div class="text-xs truncate {item.isDir ? 'font-medium text-white' : 'text-neutral-200'}">{item.name}</div>
+                {#if !item.isDir}
+                  <div class="text-[10px] font-mono text-neutral-500">{formatSize(item.size, item.isDir)}</div>
+                {/if}
+              </div>
+            </button>
+
+            <div class="flex items-center gap-1 shrink-0">
+              {#if !item.isDir && !isLocal}
+                <button
+                  type="button"
+                  onclick={() => handleDownload(item)}
+                  class="flex h-9 w-9 items-center justify-center rounded-lg text-neutral-400 active:bg-[#222230] active:text-emerald-400 transition"
+                  aria-label="Download"
+                >
+                  <Download class="h-4 w-4" />
+                </button>
+              {/if}
+              <button
+                type="button"
+                onclick={() => handleDelete(item)}
+                class="flex h-9 w-9 items-center justify-center rounded-lg text-neutral-400 active:bg-[#222230] active:text-rose-400 transition"
+                aria-label="Delete"
+              >
+                <Trash2 class="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        {/each}
+      </div>
+
+      <!-- Desktop File Table -->
+      <table class="hidden md:table w-full text-left border-collapse">
         <thead class="sticky top-0 bg-[#121218] text-[10px] uppercase tracking-wider text-neutral-500 border-b border-[#1d1d27]">
           <tr>
             <th class="w-8 px-2.5 py-1.5"></th>
